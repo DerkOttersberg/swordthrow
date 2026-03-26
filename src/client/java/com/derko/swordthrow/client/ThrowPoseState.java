@@ -96,12 +96,12 @@ public final class ThrowPoseState {
 
         matrices.translate(
             pose.offHandSide() * 0.24F * hidden - pose.offHandSide() * 0.10F * extend + pose.offHandSide() * 0.004F * pose.offSwaySide(),
-            OFF_HAND_BASE_LIFT + -0.04F * hidden + 0.48F * extend - 0.18F * drop + 0.008F * pose.offSwayLift(),
-            0.06F * hidden - 0.30F * extend - 0.006F * pose.offSwayDepth()
+            OFF_HAND_BASE_LIFT + -0.04F * hidden + 0.55F * extend - 0.18F * drop + 0.006F * pose.offSwayLift(),
+            0.06F * hidden - 0.36F * extend - 0.006F * pose.offSwayDepth()
         );
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(pose.offHandSide() * (-34.0F * hidden + 32.0F * extend + 2.0F * pose.offSwaySide())));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(10.0F * hidden - 54.0F * extend + 8.0F * drop - 1.5F * pose.offSwayLift()));
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-16.0F * hidden - 30.0F * extend + 3.5F * pose.offSwayRoll())));
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(pose.offHandSide() * (-34.0F * hidden + 40.0F * extend + 2.0F * pose.offSwaySide())));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(10.0F * hidden - 68.0F * extend + 8.0F * drop - 1.0F * pose.offSwayLift()));
+        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-14.0F * hidden - 14.0F * extend + 2.5F * pose.offSwayRoll())));
     }
 
     private static float getChargeProgress(float tickDelta) {
@@ -129,14 +129,15 @@ public final class ThrowPoseState {
         float supportPresence = getSupportPresence(charge) * releaseVisibility;
         float time = player.age + tickDelta;
         float swayWeight = supportPresence * (1.0F - release * 0.75F) * 0.55F;
+        float offSwayWeight = supportPresence * (1.0F - release * 0.75F) * 0.18F;
         float mainSwaySide = MathHelper.sin(time * 0.18F) * swayWeight;
         float mainSwayLift = MathHelper.cos(time * 0.13F) * swayWeight;
         float mainSwayDepth = MathHelper.sin(time * 0.11F + 0.8F) * swayWeight;
         float mainSwayRoll = MathHelper.cos(time * 0.16F + 0.45F) * swayWeight;
-        float offSwaySide = MathHelper.sin(time * 0.15F + 1.1F) * swayWeight;
-        float offSwayLift = Math.max(0.0F, MathHelper.cos(time * 0.12F + 0.4F)) * swayWeight;
-        float offSwayDepth = MathHelper.sin(time * 0.10F + 2.0F) * swayWeight * 0.6F;
-        float offSwayRoll = MathHelper.cos(time * 0.14F + 1.7F) * swayWeight;
+        float offSwaySide = MathHelper.sin(time * 0.13F + 1.1F) * offSwayWeight * 0.45F;
+        float offSwayLift = MathHelper.cos(time * 0.11F + 0.4F) * offSwayWeight * 0.20F;
+        float offSwayDepth = MathHelper.sin(time * 0.09F + 2.0F) * offSwayWeight * 0.22F;
+        float offSwayRoll = MathHelper.cos(time * 0.12F + 1.7F) * offSwayWeight * 0.55F;
 
         float windUp = charge * (1.0F - release * 0.82F);
         float snap = release * (0.42F + 0.58F * releaseStrength);

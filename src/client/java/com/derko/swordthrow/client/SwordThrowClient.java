@@ -1,5 +1,6 @@
 package com.derko.swordthrow.client;
 
+import com.derko.swordthrow.client.render.ThrownSwordRenderer;
 import com.derko.swordthrow.entity.ModEntities;
 import com.derko.swordthrow.network.ThrowSwordPayload;
 import net.fabricmc.api.ClientModInitializer;
@@ -10,7 +11,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.render.entity.FlyingItemEntityRenderer;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Identifier;
@@ -29,7 +29,7 @@ public class SwordThrowClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        EntityRendererRegistry.register(ModEntities.THROWN_SWORD, FlyingItemEntityRenderer::new);
+        EntityRendererRegistry.register(ModEntities.THROWN_SWORD, ThrownSwordRenderer::new);
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> renderChargeBar(drawContext));
 
