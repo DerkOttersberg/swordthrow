@@ -17,21 +17,26 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(HeldItemRenderer.class)
 public abstract class HeldItemRendererMixin {
+
     @Invoker("renderArmHoldingItem")
     protected abstract void swordthrow$invokeRenderArmHoldingItem(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, float equipProgress, float swingProgress, Arm arm);
 
-    @Inject(method = "renderFirstPersonItem", at = @At("HEAD"))
-    private void swordthrow$applyThrowPose(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item, float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
-        ThrowPoseState.applyFirstPersonPose(player, hand, matrices, tickDelta);
-    }
+    @Inject(
+        method = "renderFirstPersonItem",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/client/util/math/MatrixStack;push()V", shift = At.Shift.AFTER)
+    )
+    private void swordthrow$applyThrowPoseInScope(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item, float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
+        if (player.isInvisible()) return;
 
-    @Inject(method = "renderFirstPersonItem", at = @At("TAIL"))
-    private void swordthrow$renderSwordArm(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item, float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
-        if (item.isEmpty() || !item.isIn(ItemTags.SWORDS) || player.isInvisible()) {
+        if (hand == Hand.MAIN_HAND && !item.isEmpty() && item.isIn(ItemTags.SWORDS)) {
+            ThrowPoseState.applyMainHandPose(player, matrices, tickDelta);
             return;
         }
 
-        Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-        this.swordthrow$invokeRenderArmHoldingItem(matrices, queue, light, equipProgress, swingProgress, arm);
+        if (hand == Hand.OFF_HAND && item.isEmpty() && ThrowPoseState.isOffHandVisible()) {
+            Arm aimArm = player.getMainArm().getOpposite();
+            ThrowPoseState.applyOffHandAimContext(matrices, aimArm, tickDelta);
+            this.swordthrow$invokeRenderArmHoldingItem(matrices, queue, light, 0.0F, swingProgress, aimArm);
+        }
     }
 }

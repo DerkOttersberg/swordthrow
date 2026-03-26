@@ -52,8 +52,12 @@ public class SwordThrowClient implements ClientModInitializer {
             }
 
             if (charging) {
-                ThrowPoseState.releaseForward();
-                ClientPlayNetworking.send(new ThrowSwordPayload(chargeTicks));
+                if (chargeTicks >= MAX_CHARGE_TICKS / 2) {
+                    ThrowPoseState.releaseForward();
+                    ClientPlayNetworking.send(new ThrowSwordPayload(chargeTicks));
+                } else {
+                    ThrowPoseState.cancel();
+                }
                 charging = false;
                 chargeTicks = 0;
             }

@@ -38,6 +38,10 @@ public class SwordThrowMod implements ModInitializer {
 
         int chargeTicks = Math.max(0, Math.min(rawChargeTicks, 30));
 
+        if (chargeTicks < 15) {
+            return;
+        }
+
         ItemStack held = player.getMainHandStack();
         if (!held.isIn(ItemTags.SWORDS)) {
             return;

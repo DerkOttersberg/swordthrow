@@ -3,12 +3,11 @@ package com.derko.swordthrow.client;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Arm;
-import net.minecraft.util.Hand;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 
 public final class ThrowPoseState {
-    private static final int RELEASE_TICKS = 5;
+    private static final int RELEASE_TICKS = 6;
 
     private static float chargeProgress;
     private static int releaseTicksRemaining;
@@ -43,32 +42,76 @@ public final class ThrowPoseState {
         }
     }
 
-    public static void applyFirstPersonPose(AbstractClientPlayerEntity player, Hand hand, MatrixStack matrices, float tickDelta) {
-        if (hand != Hand.MAIN_HAND) {
-            return;
-        }
+    /** Visible while charging and during the short off-hand recoil after release. */
+    public static boolean isOffHandVisible() {
+        return chargeProgress > 0.001F || releaseTicksRemaining > 0;
+    }
 
+    /**
+     * Main-hand pose applied at TAIL of renderFirstPersonItem (inside a push/pop scope).
+     * Wind-up: sword arm rises UP and pulls BACK above the shoulder.
+     * Release: arm drives sharply FORWARD and DOWN — overhand follow-through.
+     */
+    public static void applyMainHandPose(AbstractClientPlayerEntity player, MatrixStack matrices, float tickDelta) {
         boolean hasCharge = chargeProgress > 0.001F;
         boolean releasing = releaseTicksRemaining > 0;
-        if (!hasCharge && !releasing) {
-            return;
-        }
+        if (!hasCharge && !releasing) return;
 
-        Arm handArm = player.getMainArm();
-        float side = handArm == Arm.RIGHT ? 1.0F : -1.0F;
         float easedCharge = chargeProgress * chargeProgress;
 
         float releaseProgress = 0.0F;
         if (releasing) {
             float raw = 1.0F - ((releaseTicksRemaining - tickDelta) / RELEASE_TICKS);
             float clamped = MathHelper.clamp(raw, 0.0F, 1.0F);
+            releaseProgress = 1.0F - (1.0F - clamped) * (1.0F - clamped); // ease-out
+        }
+
+        float windAmount = easedCharge * (1.0F - releaseProgress);
+        float snap = releaseProgress;
+
+        Arm handArm = player.getMainArm();
+        float side = handArm == Arm.RIGHT ? 1.0F : -1.0F;
+
+        // Wind-up  : arm moves UP (Y+) and BACK (Z+) and slightly to the throwing side
+        // Release  : arm whips FORWARD (Z-) and slightly DOWN — stop around hip level
+        matrices.translate(
+            side * 0.08F * windAmount - side * 0.02F * snap,
+            0.30F * windAmount - 0.05F * snap,
+            0.18F * windAmount - 0.55F * snap
+        );
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * (10.0F * windAmount - 4.0F * snap)));
+        // -130° = arm tipped well above horizontal (near-vertical overhead)
+        // +60°  = arm past neutral (pointing slightly down-forward after the throw)
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-130.0F * windAmount + 60.0F * snap));
+    }
+
+    /**
+     * Off-hand aiming context used both while charging and during the brief release recoil.
+     * Charging moves the arm forward toward the target; release snaps it back quickly.
+     */
+    public static void applyOffHandAimContext(MatrixStack matrices, Arm offArm, float tickDelta) {
+        float windAmount = chargeProgress * chargeProgress;
+        float releaseProgress = 0.0F;
+        if (releaseTicksRemaining > 0) {
+            float raw = 1.0F - ((releaseTicksRemaining - tickDelta) / RELEASE_TICKS);
+            float clamped = MathHelper.clamp(raw, 0.0F, 1.0F);
             releaseProgress = 1.0F - (1.0F - clamped) * (1.0F - clamped);
         }
 
-        float backAmount = easedCharge * (1.0F - releaseProgress);
+        if (windAmount < 0.001F && releaseProgress < 0.001F) return;
 
-        matrices.translate(side * 0.05F * backAmount, -0.04F * backAmount, 0.18F * backAmount - 0.32F * releaseProgress);
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * (20.0F * backAmount - 6.0F * releaseProgress)));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-30.0F * backAmount + 95.0F * releaseProgress));
+        float side = offArm == Arm.RIGHT ? 1.0F : -1.0F;
+        float extend = windAmount * (1.0F - releaseProgress);
+        float recoil = releaseProgress;
+
+        // Charge: move arm inward and forward to aim.
+        // Release: pull it back out and down in a quick recoil.
+        matrices.translate(
+            -side * 0.22F * extend + side * 0.18F * recoil,
+            0.06F * extend - 0.10F * recoil,
+            -0.15F * extend + 0.24F * recoil
+        );
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * (15.0F * extend - 18.0F * recoil)));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-18.0F * extend + 24.0F * recoil));
     }
 }
