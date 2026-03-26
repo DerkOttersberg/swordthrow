@@ -9,6 +9,7 @@ import net.minecraft.util.math.RotationAxis;
 public final class ThrowPoseState {
     private static final int RELEASE_TICKS = 6;
 
+    private static float previousChargeProgress;
     private static float chargeProgress;
     private static int releaseTicksRemaining;
 
@@ -16,11 +17,13 @@ public final class ThrowPoseState {
     }
 
     public static void beginCharge() {
+        previousChargeProgress = 0.0F;
         chargeProgress = 0.0F;
         releaseTicksRemaining = 0;
     }
 
     public static void setChargeProgress(float progress) {
+        previousChargeProgress = chargeProgress;
         chargeProgress = MathHelper.clamp(progress, 0.0F, 1.0F);
     }
 
@@ -29,6 +32,7 @@ public final class ThrowPoseState {
     }
 
     public static void cancel() {
+        previousChargeProgress = 0.0F;
         chargeProgress = 0.0F;
         releaseTicksRemaining = 0;
     }
@@ -37,6 +41,7 @@ public final class ThrowPoseState {
         if (releaseTicksRemaining > 0) {
             releaseTicksRemaining--;
             if (releaseTicksRemaining == 0) {
+                previousChargeProgress = 0.0F;
                 chargeProgress = 0.0F;
             }
         }
@@ -53,11 +58,12 @@ public final class ThrowPoseState {
      * Release: arm drives sharply FORWARD and DOWN — overhand follow-through.
      */
     public static void applyMainHandPose(AbstractClientPlayerEntity player, MatrixStack matrices, float tickDelta) {
-        boolean hasCharge = chargeProgress > 0.001F;
+        float interpolatedCharge = getChargeProgress(tickDelta);
+        boolean hasCharge = interpolatedCharge > 0.001F;
         boolean releasing = releaseTicksRemaining > 0;
         if (!hasCharge && !releasing) return;
 
-        float easedCharge = chargeProgress * chargeProgress;
+        float easedCharge = interpolatedCharge * interpolatedCharge;
 
         float releaseProgress = 0.0F;
         if (releasing) {
@@ -90,7 +96,8 @@ public final class ThrowPoseState {
      * Charging moves the arm forward toward the target; release snaps it back quickly.
      */
     public static void applyOffHandAimContext(MatrixStack matrices, Arm offArm, float tickDelta) {
-        float windAmount = chargeProgress * chargeProgress;
+        float interpolatedCharge = getChargeProgress(tickDelta);
+        float windAmount = interpolatedCharge * interpolatedCharge;
         float releaseProgress = 0.0F;
         if (releaseTicksRemaining > 0) {
             float raw = 1.0F - ((releaseTicksRemaining - tickDelta) / RELEASE_TICKS);
@@ -113,5 +120,9 @@ public final class ThrowPoseState {
         );
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(side * (15.0F * extend - 18.0F * recoil)));
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-18.0F * extend + 24.0F * recoil));
+    }
+
+    private static float getChargeProgress(float tickDelta) {
+        return MathHelper.lerp(tickDelta, previousChargeProgress, chargeProgress);
     }
 }
