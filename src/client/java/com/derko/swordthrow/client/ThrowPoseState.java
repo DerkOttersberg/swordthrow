@@ -92,16 +92,16 @@ public final class ThrowPoseState {
         float presence = pose.offHandPresence();
         float hidden = 1.0F - presence;
         float extend = pose.offHandExtend();
-        float recoil = pose.offHandRecoil();
+        float drop = pose.offHandRecoil();
 
         matrices.translate(
-            pose.offHandSide() * 0.24F * hidden - pose.offHandSide() * 0.10F * extend + pose.offHandSide() * 0.16F * recoil + pose.offHandSide() * 0.004F * pose.offSwaySide(),
-            OFF_HAND_BASE_LIFT + -0.04F * hidden + 0.48F * extend - 0.04F * recoil + 0.008F * pose.offSwayLift(),
-            0.06F * hidden - 0.30F * extend + 0.18F * recoil - 0.006F * pose.offSwayDepth()
+            pose.offHandSide() * 0.24F * hidden - pose.offHandSide() * 0.10F * extend + pose.offHandSide() * 0.004F * pose.offSwaySide(),
+            OFF_HAND_BASE_LIFT + -0.04F * hidden + 0.48F * extend - 0.18F * drop + 0.008F * pose.offSwayLift(),
+            0.06F * hidden - 0.30F * extend - 0.006F * pose.offSwayDepth()
         );
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(pose.offHandSide() * (-34.0F * hidden + 32.0F * extend - 22.0F * recoil + 2.0F * pose.offSwaySide())));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(10.0F * hidden - 58.0F * extend + 20.0F * recoil - 1.5F * pose.offSwayLift()));
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-16.0F * hidden - 30.0F * extend + 12.0F * recoil + 3.5F * pose.offSwayRoll())));
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(pose.offHandSide() * (-34.0F * hidden + 32.0F * extend + 2.0F * pose.offSwaySide())));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(10.0F * hidden - 54.0F * extend + 8.0F * drop - 1.5F * pose.offSwayLift()));
+        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-16.0F * hidden - 30.0F * extend + 3.5F * pose.offSwayRoll())));
     }
 
     private static float getChargeProgress(float tickDelta) {
@@ -125,7 +125,8 @@ public final class ThrowPoseState {
         float charge = ease(getChargeProgress(tickDelta));
         float release = getReleaseProgress(tickDelta);
         float releaseStrength = ease(Math.max(releaseStartCharge, charge));
-        float supportPresence = getSupportPresence(charge);
+        float releaseVisibility = 1.0F - release;
+        float supportPresence = getSupportPresence(charge) * releaseVisibility;
         float time = player.age + tickDelta;
         float swayWeight = supportPresence * (1.0F - release * 0.75F) * 0.55F;
         float mainSwaySide = MathHelper.sin(time * 0.18F) * swayWeight;
@@ -139,8 +140,9 @@ public final class ThrowPoseState {
 
         float windUp = charge * (1.0F - release * 0.82F);
         float snap = release * (0.42F + 0.58F * releaseStrength);
-        float offHandExtend = supportPresence * (0.35F + 0.65F * charge) * (1.0F - release * 0.88F);
-        float offHandRecoil = release * (0.62F + 0.38F * releaseStrength);
+        float heldCharge = Math.max(charge, releaseStartCharge * releaseVisibility);
+        float offHandExtend = getSupportPresence(heldCharge) * (0.35F + 0.65F * heldCharge) * releaseVisibility;
+        float offHandRecoil = release * release;
 
         return new PoseSample(
             mainArm == Arm.RIGHT ? 1.0F : -1.0F,
