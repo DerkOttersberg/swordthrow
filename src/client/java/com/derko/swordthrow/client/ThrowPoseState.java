@@ -129,7 +129,7 @@ public final class ThrowPoseState {
         float supportPresence = getSupportPresence(charge) * releaseVisibility;
         float time = player.age + tickDelta;
         float swayWeight = supportPresence * (1.0F - release * 0.75F) * 0.55F;
-        float offSwayWeight = supportPresence * (1.0F - release * 0.75F) * 0.18F;
+        float offSwayWeight = supportPresence * (1.0F - release * 0.75F) * 0.24F;
         float mainSwaySide = MathHelper.sin(time * 0.18F) * swayWeight;
         float mainSwayLift = MathHelper.cos(time * 0.13F) * swayWeight;
         float mainSwayDepth = MathHelper.sin(time * 0.11F + 0.8F) * swayWeight;
@@ -142,7 +142,8 @@ public final class ThrowPoseState {
         float windUp = charge * (1.0F - release * 0.82F);
         float snap = release * (0.42F + 0.58F * releaseStrength);
         float heldCharge = Math.max(charge, releaseStartCharge * releaseVisibility);
-        float offHandExtend = getSupportPresence(heldCharge) * (0.35F + 0.65F * heldCharge) * releaseVisibility;
+        float heldOffHandCharge = easeIntoHalfCharge(heldCharge);
+        float offHandExtend = getSupportPresence(heldOffHandCharge) * (0.35F + 0.65F * heldOffHandCharge) * releaseVisibility;
         float offHandRecoil = release * release;
 
         return new PoseSample(
@@ -167,6 +168,16 @@ public final class ThrowPoseState {
     private static float smoothStep(float edge0, float edge1, float value) {
         float normalized = MathHelper.clamp((value - edge0) / (edge1 - edge0), 0.0F, 1.0F);
         return normalized * normalized * (3.0F - 2.0F * normalized);
+    }
+
+    private static float easeIntoHalfCharge(float charge) {
+        float cappedCharge = MathHelper.clamp(charge, 0.0F, 1.0F);
+        if (cappedCharge >= 0.5F) {
+            return 0.5F;
+        }
+
+        float remaining = 0.5F - cappedCharge;
+        return 0.5F - (remaining * remaining) / 0.5F;
     }
 
     private static float getSupportPresence(float charge) {
