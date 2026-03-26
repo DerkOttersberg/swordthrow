@@ -9,6 +9,8 @@ import net.minecraft.util.math.RotationAxis;
 public final class ThrowPoseState {
     private static final int RELEASE_TICKS = 6;
     private static final float CHARGE_RESPONSE = 0.30F;
+    private static final float MAIN_HAND_BASE_LIFT = 0.06F;
+    private static final float OFF_HAND_BASE_LIFT = 0.43F;
 
     private static final FloatDriver chargeDriver = new FloatDriver();
 
@@ -58,7 +60,7 @@ public final class ThrowPoseState {
     }
 
     public static boolean isOffHandVisible() {
-        return Math.max(chargeTarget, getChargeProgress(1.0F)) > 0.001F || releaseTicksRemaining > 0;
+        return getSupportPresence(getChargeProgress(1.0F)) > 0.001F || releaseTicksRemaining > 0;
     }
 
     public static boolean isChargeIndicatorVisible() {
@@ -70,34 +72,36 @@ public final class ThrowPoseState {
     }
 
     public static void applyMainHandPose(AbstractClientPlayerEntity player, MatrixStack matrices, float tickDelta) {
-        PoseSample pose = sample(player.getMainArm(), tickDelta);
+        PoseSample pose = sample(player, player.getMainArm(), tickDelta);
         if (!pose.visible()) return;
 
         matrices.translate(
-            pose.side() * 0.07F * pose.windUp() - pose.side() * 0.02F * pose.release(),
-            0.28F * pose.windUp() - 0.04F * pose.release(),
-            0.10F * pose.windUp() - 0.36F * pose.release()
+            pose.side() * 0.06F * pose.windUp() - pose.side() * 0.018F * pose.release() + pose.side() * 0.010F * pose.mainSwaySide(),
+            MAIN_HAND_BASE_LIFT + 0.27F * pose.windUp() - 0.025F * pose.release() + 0.012F * pose.mainSwayLift(),
+            0.12F * pose.windUp() - 0.28F * pose.release() - 0.010F * pose.mainSwayDepth()
         );
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(pose.side() * (10.0F * pose.windUp() - 5.0F * pose.release())));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-124.0F * pose.windUp() + 48.0F * pose.release()));
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-pose.side() * 8.0F * pose.windUp() + pose.side() * 10.0F * pose.release()));
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(pose.side() * (12.0F * pose.windUp() - 5.0F * pose.release() + 2.5F * pose.mainSwaySide())));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-126.0F * pose.windUp() + 38.0F * pose.release() - 2.0F * pose.mainSwayLift()));
+        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-pose.side() * 12.0F * pose.windUp() + pose.side() * 9.0F * pose.release() + pose.side() * 4.0F * pose.mainSwayRoll()));
     }
 
-    public static void applyOffHandAimContext(MatrixStack matrices, Arm offArm, float tickDelta) {
-        PoseSample pose = sample(offArm.getOpposite(), tickDelta);
+    public static void applyOffHandAimContext(AbstractClientPlayerEntity player, MatrixStack matrices, Arm offArm, float tickDelta) {
+        PoseSample pose = sample(player, offArm.getOpposite(), tickDelta);
         if (!pose.visible()) return;
 
+        float presence = pose.offHandPresence();
+        float hidden = 1.0F - presence;
         float extend = pose.offHandExtend();
         float recoil = pose.offHandRecoil();
 
         matrices.translate(
-            -pose.offHandSide() * 0.16F * extend + pose.offHandSide() * 0.22F * recoil,
-            0.03F * extend - 0.12F * recoil,
-            -0.09F * extend + 0.30F * recoil
+            pose.offHandSide() * 0.24F * hidden - pose.offHandSide() * 0.10F * extend + pose.offHandSide() * 0.16F * recoil + pose.offHandSide() * 0.004F * pose.offSwaySide(),
+            OFF_HAND_BASE_LIFT + -0.04F * hidden + 0.48F * extend - 0.04F * recoil + 0.008F * pose.offSwayLift(),
+            0.06F * hidden - 0.30F * extend + 0.18F * recoil - 0.006F * pose.offSwayDepth()
         );
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(pose.offHandSide() * (10.0F * extend - 24.0F * recoil)));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(-10.0F * extend + 30.0F * recoil));
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-12.0F * extend + 14.0F * recoil)));
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(pose.offHandSide() * (-34.0F * hidden + 32.0F * extend - 22.0F * recoil + 2.0F * pose.offSwaySide())));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(10.0F * hidden - 58.0F * extend + 20.0F * recoil - 1.5F * pose.offSwayLift()));
+        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-16.0F * hidden - 30.0F * extend + 12.0F * recoil + 3.5F * pose.offSwayRoll())));
     }
 
     private static float getChargeProgress(float tickDelta) {
@@ -117,14 +121,25 @@ public final class ThrowPoseState {
         return value * value * (3.0F - 2.0F * value);
     }
 
-    private static PoseSample sample(Arm mainArm, float tickDelta) {
+    private static PoseSample sample(AbstractClientPlayerEntity player, Arm mainArm, float tickDelta) {
         float charge = ease(getChargeProgress(tickDelta));
         float release = getReleaseProgress(tickDelta);
         float releaseStrength = ease(Math.max(releaseStartCharge, charge));
+        float supportPresence = getSupportPresence(charge);
+        float time = player.age + tickDelta;
+        float swayWeight = supportPresence * (1.0F - release * 0.75F) * 0.55F;
+        float mainSwaySide = MathHelper.sin(time * 0.18F) * swayWeight;
+        float mainSwayLift = MathHelper.cos(time * 0.13F) * swayWeight;
+        float mainSwayDepth = MathHelper.sin(time * 0.11F + 0.8F) * swayWeight;
+        float mainSwayRoll = MathHelper.cos(time * 0.16F + 0.45F) * swayWeight;
+        float offSwaySide = MathHelper.sin(time * 0.15F + 1.1F) * swayWeight;
+        float offSwayLift = Math.max(0.0F, MathHelper.cos(time * 0.12F + 0.4F)) * swayWeight;
+        float offSwayDepth = MathHelper.sin(time * 0.10F + 2.0F) * swayWeight * 0.6F;
+        float offSwayRoll = MathHelper.cos(time * 0.14F + 1.7F) * swayWeight;
 
         float windUp = charge * (1.0F - release * 0.82F);
         float snap = release * (0.42F + 0.58F * releaseStrength);
-        float offHandExtend = charge * charge * (1.0F - release * 0.88F);
+        float offHandExtend = supportPresence * (0.35F + 0.65F * charge) * (1.0F - release * 0.88F);
         float offHandRecoil = release * (0.62F + 0.38F * releaseStrength);
 
         return new PoseSample(
@@ -132,14 +147,48 @@ public final class ThrowPoseState {
             mainArm == Arm.RIGHT ? -1.0F : 1.0F,
             windUp,
             snap,
+            supportPresence,
             offHandExtend,
-            offHandRecoil
+            offHandRecoil,
+            mainSwaySide,
+            mainSwayLift,
+            mainSwayDepth,
+            mainSwayRoll,
+            offSwaySide,
+            offSwayLift,
+            offSwayDepth,
+            offSwayRoll
         );
     }
 
-    private record PoseSample(float side, float offHandSide, float windUp, float release, float offHandExtend, float offHandRecoil) {
+    private static float smoothStep(float edge0, float edge1, float value) {
+        float normalized = MathHelper.clamp((value - edge0) / (edge1 - edge0), 0.0F, 1.0F);
+        return normalized * normalized * (3.0F - 2.0F * normalized);
+    }
+
+    private static float getSupportPresence(float charge) {
+        return smoothStep(0.10F, 0.28F, charge);
+    }
+
+    private record PoseSample(
+        float side,
+        float offHandSide,
+        float windUp,
+        float release,
+        float offHandPresence,
+        float offHandExtend,
+        float offHandRecoil,
+        float mainSwaySide,
+        float mainSwayLift,
+        float mainSwayDepth,
+        float mainSwayRoll,
+        float offSwaySide,
+        float offSwayLift,
+        float offSwayDepth,
+        float offSwayRoll
+    ) {
         private boolean visible() {
-            return windUp > 0.001F || release > 0.001F || offHandExtend > 0.001F || offHandRecoil > 0.001F;
+            return windUp > 0.001F || release > 0.001F || offHandPresence > 0.001F || offHandExtend > 0.001F || offHandRecoil > 0.001F;
         }
     }
 

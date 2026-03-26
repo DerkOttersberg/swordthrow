@@ -35,7 +35,7 @@ public abstract class HeldItemRendererMixin {
 
         if (hand == Hand.OFF_HAND && item.isEmpty() && ThrowPoseState.isOffHandVisible()) {
             Arm aimArm = player.getMainArm().getOpposite();
-            ThrowPoseState.applyOffHandAimContext(matrices, aimArm, tickDelta);
+            ThrowPoseState.applyOffHandAimContext(player, matrices, aimArm, tickDelta);
             this.swordthrow$invokeRenderArmHoldingItem(matrices, queue, light, 0.0F, swingProgress, aimArm);
         }
     }
