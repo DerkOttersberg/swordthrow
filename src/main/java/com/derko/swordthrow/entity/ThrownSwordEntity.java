@@ -195,6 +195,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
 
         EnchantmentHelper.onTargetDamaged(serverWorld, target, this.getDamageSources().thrown(this, attacker), swordStack);
         swordStack.postHit(target, attacker);
+        swordStack.postDamageEntity(target, attacker);
     }
 
     private void dropAsItemAndDiscard() {
