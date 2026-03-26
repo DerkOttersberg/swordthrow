@@ -30,11 +30,17 @@ import net.minecraft.util.math.Vec3d;
 public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, ThrownSwordRenderer.ThrownSwordRenderState> {
     private static final Identifier TRAIL_TEXTURE = SwordThrowMod.id("textures/effect/sword_trail.png");
     private static final RenderLayer TRAIL_LAYER = RenderLayers.entityTranslucentEmissive(TRAIL_TEXTURE);
-    private static final int TRAIL_COLOR = 0x22CFFF;
+    private static final int TRAIL_COLOR = 0xD4A63A;
     private static final float OUTER_TRAIL_WIDTH = 0.15F;
     private static final float INNER_TRAIL_WIDTH = OUTER_TRAIL_WIDTH / 1.5F;
     private static final int TRAIL_SUBDIVISIONS = 4;
+    private static final float THROWN_SWORD_SCALE = 0.96F;
+    private static final float FLIGHT_SPIN_SPEED = 34.0F;
+    private static final int TUMBLE_DURATION_TICKS = 14;
+    private static final double TUMBLE_TRIGGER_DOT = 0.55D;
+    private static final double TUMBLE_MIN_SPEED_SQUARED = 0.16D;
     private static final Map<Integer, Integer> LAST_TWINKLE_AGE = new HashMap<>();
+    private static final Map<Integer, SpinState> SPIN_STATES = new HashMap<>();
     private final ItemModelManager itemModelManager;
 
     public ThrownSwordRenderer(EntityRendererFactory.Context context) {
@@ -59,8 +65,10 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.flightYaw + 90.0F));
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-state.flightPitch + 90.0F));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(state.spin));
-        matrices.scale(1.2F, 1.2F, 1.2F);
+        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(state.roll));
+        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.tumbleYaw));
+        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(state.tumblePitch));
+        matrices.scale(THROWN_SWORD_SCALE, THROWN_SWORD_SCALE, THROWN_SWORD_SCALE);
 
         state.itemRenderState.render(matrices, queue, state.light, OverlayTexture.DEFAULT_UV, state.outlineColor);
 
@@ -84,10 +92,61 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
         state.flightYaw = horizontalSpeed > 1.0E-5D ? (float)Math.toDegrees(Math.atan2(velocity.x, velocity.z)) : entity.getYaw();
         state.flightPitch = velocity.lengthSquared() > 1.0E-5D ? (float)Math.toDegrees(Math.atan2(velocity.y, horizontalSpeed)) : entity.getPitch();
-        state.spin = (entity.age + tickDelta) * 32.0F;
         state.entityId = entity.getId();
         state.entityAge = entity.age;
         state.velocitySquared = velocity.lengthSquared();
+        updateSpinState(state, velocity, tickDelta);
+    }
+
+    private static void updateSpinState(ThrownSwordRenderState state, Vec3d velocity, float tickDelta) {
+        SpinState spinState = SPIN_STATES.computeIfAbsent(state.entityId, ignored -> new SpinState());
+        if (spinState.lastProcessedAge != state.entityAge) {
+            advanceSpinState(spinState, state, velocity);
+            spinState.lastProcessedAge = state.entityAge;
+        }
+
+        float partialTicks = tickDelta;
+        state.roll = spinState.baseRoll + spinState.rollSpeed * partialTicks;
+        state.tumbleYaw = spinState.baseYaw + spinState.yawSpeed * partialTicks;
+        state.tumblePitch = spinState.basePitch + spinState.pitchSpeed * partialTicks;
+    }
+
+    private static void advanceSpinState(SpinState spinState, ThrownSwordRenderState state, Vec3d velocity) {
+        double speedSquared = velocity.lengthSquared();
+        if (spinState.lastVelocity.lengthSquared() >= TUMBLE_MIN_SPEED_SQUARED && speedSquared >= TUMBLE_MIN_SPEED_SQUARED) {
+            double alignment = spinState.lastVelocity.normalize().dotProduct(velocity.normalize());
+            if (alignment < TUMBLE_TRIGGER_DOT) {
+                spinState.tumbleTicksRemaining = TUMBLE_DURATION_TICKS;
+                spinState.rollSpeed = randomSigned(state.entityId, state.entityAge, 0) * 24.0F;
+                spinState.yawSpeed = randomSigned(state.entityId, state.entityAge, 1) * 42.0F;
+                spinState.pitchSpeed = randomSigned(state.entityId, state.entityAge, 2) * 42.0F;
+            }
+        }
+
+        if (spinState.tumbleTicksRemaining > 0) {
+            spinState.baseRoll += spinState.rollSpeed;
+            spinState.baseYaw += spinState.yawSpeed;
+            spinState.basePitch += spinState.pitchSpeed;
+            spinState.rollSpeed *= 0.9F;
+            spinState.yawSpeed *= 0.9F;
+            spinState.pitchSpeed *= 0.9F;
+            spinState.tumbleTicksRemaining--;
+        } else {
+            spinState.baseRoll += FLIGHT_SPIN_SPEED;
+            spinState.baseYaw *= 0.75F;
+            spinState.basePitch *= 0.75F;
+            spinState.yawSpeed = 0.0F;
+            spinState.pitchSpeed = 0.0F;
+            spinState.rollSpeed = FLIGHT_SPIN_SPEED;
+        }
+
+        spinState.lastVelocity = velocity;
+    }
+
+    private static float randomSigned(int entityId, int entityAge, int salt) {
+        int hash = entityId * 73428767 ^ entityAge * 9122713 ^ salt * 19349663;
+        hash ^= hash >>> 16;
+        return ((hash & 0xFFFF) / 32767.5F) - 1.0F;
     }
 
     private static void spawnTrailTwinkle(ThrownSwordRenderState state) {
@@ -261,8 +320,22 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         public int entityAge;
         public float flightYaw;
         public float flightPitch;
-        public float spin;
+        public float roll;
+        public float tumbleYaw;
+        public float tumblePitch;
         public double velocitySquared;
         public List<Vec3d> trailPoints = Collections.emptyList();
+    }
+
+    private static final class SpinState {
+        private Vec3d lastVelocity = Vec3d.ZERO;
+        private int lastProcessedAge = Integer.MIN_VALUE;
+        private int tumbleTicksRemaining;
+        private float baseRoll;
+        private float baseYaw;
+        private float basePitch;
+        private float rollSpeed = FLIGHT_SPIN_SPEED;
+        private float yawSpeed;
+        private float pitchSpeed;
     }
 }
