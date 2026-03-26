@@ -8,11 +8,18 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
-import net.minecraft.util.hit.HitResult;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 public class ThrownSwordEntity extends ThrownItemEntity {
+    private static final double BOUNCE_DAMPING = 0.68D;
+    private static final double WALL_HORIZONTAL_DAMPING = 0.42D;
+    private static final double WALL_VERTICAL_DAMPING = 0.92D;
+    private static final double MIN_BOUNCE_SPEED_SQUARED = 0.18D * 0.18D;
+    private static final double BOUNCE_SURFACE_OFFSET = 0.08D;
     private boolean dropped;
 
     public ThrownSwordEntity(EntityType<? extends ThrownSwordEntity> entityType, World world) {
@@ -58,12 +65,35 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     }
 
     @Override
-    protected void onCollision(HitResult hitResult) {
-        super.onCollision(hitResult);
+    protected void onBlockHit(BlockHitResult hitResult) {
+        super.onBlockHit(hitResult);
 
-        if (!this.getEntityWorld().isClient() && hitResult.getType() != HitResult.Type.ENTITY) {
-            this.dropAsItemAndDiscard();
+        if (this.getEntityWorld().isClient()) {
+            return;
         }
+
+        Vec3d velocity = this.getVelocity();
+        Direction side = hitResult.getSide();
+        Vec3d normal = Vec3d.of(side.getVector());
+        double normalComponent = velocity.dotProduct(normal);
+        Vec3d reflectedVelocity = velocity.subtract(normal.multiply(2.0D * normalComponent)).multiply(BOUNCE_DAMPING);
+
+        if (side.getAxis().isHorizontal()) {
+            reflectedVelocity = new Vec3d(
+                reflectedVelocity.x * WALL_HORIZONTAL_DAMPING,
+                reflectedVelocity.y * WALL_VERTICAL_DAMPING,
+                reflectedVelocity.z * WALL_HORIZONTAL_DAMPING
+            );
+        }
+
+        if (reflectedVelocity.lengthSquared() < MIN_BOUNCE_SPEED_SQUARED) {
+            this.dropAsItemAndDiscard();
+            return;
+        }
+
+        Vec3d bouncePosition = hitResult.getPos().add(normal.multiply(BOUNCE_SURFACE_OFFSET));
+        this.setPosition(bouncePosition);
+        this.setVelocity(reflectedVelocity);
     }
 
     @Override
