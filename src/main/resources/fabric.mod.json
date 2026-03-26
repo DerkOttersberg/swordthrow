@@ -1,31 +1,29 @@
 {
 	"schemaVersion": 1,
-	"id": "modid",
+	"id": "swordthrow",
 	"version": "${version}",
-	"name": "Example mod",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "Sword Throw",
+	"description": "Throw your currently held sword with R using a heavy curved projectile arc and first-person throw pose animation.",
 	"authors": [
-		"Me!"
+		"derko"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"sources": "https://github.com/derko/swordthrow"
 	},
-	"license": "CC0-1.0",
-	"icon": "assets/modid/icon.png",
+	"license": "MIT",
+	"icon": "assets/swordthrow/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.example.ExampleMod"
+			"com.derko.swordthrow.SwordThrowMod"
 		],
 		"client": [
-			"com.example.ExampleModClient"
+			"com.derko.swordthrow.client.SwordThrowClient"
 		]
 	},
 	"mixins": [
-		"modid.mixins.json",
 		{
-			"config": "modid.client.mixins.json",
+			"config": "swordthrow.client.mixins.json",
 			"environment": "client"
 		}
 	],
