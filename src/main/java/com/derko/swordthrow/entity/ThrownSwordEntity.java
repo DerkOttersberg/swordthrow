@@ -1,5 +1,9 @@
 package com.derko.swordthrow.entity;
 
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.List;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
@@ -20,7 +24,9 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     private static final double WALL_VERTICAL_DAMPING = 0.92D;
     private static final double MIN_BOUNCE_SPEED_SQUARED = 0.18D * 0.18D;
     private static final double BOUNCE_SURFACE_OFFSET = 0.08D;
+    private static final int MAX_TRAIL_POINTS = 20;
     private boolean dropped;
+    private final Deque<Vec3d> trailPoints = new ArrayDeque<>();
 
     public ThrownSwordEntity(EntityType<? extends ThrownSwordEntity> entityType, World world) {
         super(entityType, world);
@@ -35,6 +41,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         super.tick();
 
         if (this.getEntityWorld().isClient()) {
+            this.recordTrailPoint();
             return;
         }
 
@@ -99,6 +106,20 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     @Override
     protected Item getDefaultItem() {
         return Items.IRON_SWORD;
+    }
+
+    public List<Vec3d> getTrailPoints() {
+        if (this.trailPoints.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return List.copyOf(this.trailPoints);
+    }
+
+    private void recordTrailPoint() {
+        this.trailPoints.addLast(new Vec3d(this.getX(), this.getY(), this.getZ()));
+        while (this.trailPoints.size() > MAX_TRAIL_POINTS) {
+            this.trailPoints.removeFirst();
+        }
     }
 
     private void dropAsItemAndDiscard() {
