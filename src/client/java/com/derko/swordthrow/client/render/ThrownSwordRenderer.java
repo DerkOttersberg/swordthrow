@@ -39,6 +39,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
     private static final int TUMBLE_DURATION_TICKS = 14;
     private static final double TUMBLE_TRIGGER_DOT = 0.55D;
     private static final double TUMBLE_MIN_SPEED_SQUARED = 0.16D;
+    private static final double RESTING_SPEED_SQUARED = 0.0025D;
     private static final Map<Integer, Integer> LAST_TWINKLE_AGE = new HashMap<>();
     private static final Map<Integer, SpinState> SPIN_STATES = new HashMap<>();
     private final ItemModelManager itemModelManager;
@@ -57,7 +58,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
         matrices.push();
 
-        if (state.trailPoints.size() > 1) {
+        if (!state.embedded && state.trailPoints.size() > 1) {
             renderTrail(state, matrices, queue, cameraState, OUTER_TRAIL_WIDTH, 0.95F);
             renderTrail(state, matrices, queue, cameraState, INNER_TRAIL_WIDTH, 0.63F);
             spawnTrailTwinkle(state);
@@ -85,7 +86,8 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
     public void updateRenderState(ThrownSwordEntity entity, ThrownSwordRenderState state, float tickDelta) {
         super.updateRenderState(entity, state, tickDelta);
         this.itemModelManager.updateForNonLivingEntity(state.itemRenderState, entity.getStack(), ItemDisplayContext.FIXED, entity);
-        state.trailPoints = entity.getTrailPoints();
+        state.embedded = entity.isEmbedded();
+        state.trailPoints = state.embedded ? Collections.emptyList() : entity.getTrailPoints();
 
         Vec3d velocity = entity.getVelocity();
         double horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
@@ -95,6 +97,15 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         state.entityId = entity.getId();
         state.entityAge = entity.age;
         state.velocitySquared = velocity.lengthSquared();
+
+        if (state.embedded) {
+            state.roll = entity.getEmbeddedRoll();
+            state.tumbleYaw = 0.0F;
+            state.tumblePitch = 0.0F;
+            SPIN_STATES.remove(state.entityId);
+            return;
+        }
+
         updateSpinState(state, velocity, tickDelta);
     }
 
@@ -113,6 +124,14 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
     private static void advanceSpinState(SpinState spinState, ThrownSwordRenderState state, Vec3d velocity) {
         double speedSquared = velocity.lengthSquared();
+        if (speedSquared < RESTING_SPEED_SQUARED) {
+            spinState.rollSpeed = 0.0F;
+            spinState.yawSpeed = 0.0F;
+            spinState.pitchSpeed = 0.0F;
+            spinState.tumbleTicksRemaining = 0;
+            return;
+        }
+
         if (spinState.lastVelocity.lengthSquared() >= TUMBLE_MIN_SPEED_SQUARED && speedSquared >= TUMBLE_MIN_SPEED_SQUARED) {
             double alignment = spinState.lastVelocity.normalize().dotProduct(velocity.normalize());
             if (alignment < TUMBLE_TRIGGER_DOT) {
@@ -316,6 +335,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
     public static class ThrownSwordRenderState extends EntityRenderState {
         public final ItemRenderState itemRenderState = new ItemRenderState();
+        public boolean embedded;
         public int entityId;
         public int entityAge;
         public float flightYaw;
