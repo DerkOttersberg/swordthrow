@@ -13,10 +13,12 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.projectile.thrown.ThrownItemEntity;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
@@ -35,6 +37,8 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     private static final float VELOCITY_DAMAGE_FACTOR = 0.7F;
     private static final float VELOCITY_DAMAGE_BASE = 0.65F;
     private static final float CLEAN_FLIGHT_DAMAGE_BONUS = 1.35F;
+    private static final float BLOCK_BASE_DAMAGE = 0.35F;
+    private static final float MISC_BASE_DAMAGE = 0.6F;
     private boolean dropped;
     private boolean hitBlock;
     private final Deque<Vec3d> trailPoints = new ArrayDeque<>();
@@ -43,8 +47,8 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         super(entityType, world);
     }
 
-    public ThrownSwordEntity(World world, LivingEntity owner, ItemStack sword) {
-        super(ModEntities.THROWN_SWORD, owner, world, sword.copyWithCount(1));
+    public ThrownSwordEntity(World world, LivingEntity owner, ItemStack stack) {
+        super(ModEntities.THROWN_SWORD, owner, world, stack.copy());
     }
 
     @Override
@@ -76,13 +80,13 @@ public class ThrownSwordEntity extends ThrownItemEntity {
             return;
         }
 
-        ItemStack swordStack = this.getStack();
+        ItemStack thrownStack = this.getStack();
         DamageSource source = this.getDamageSources().thrown(this, this.getOwner());
-        float damage = this.getThrownDamage(serverWorld, swordStack, hitResult.getEntity(), source);
+        float damage = this.getThrownDamage(serverWorld, thrownStack, hitResult.getEntity(), source);
         boolean dealtDamage = hitResult.getEntity().damage(serverWorld, source, damage);
 
         if (dealtDamage) {
-            this.applySwordHitEffects(serverWorld, swordStack, hitResult);
+            this.applyThrownHitEffects(serverWorld, thrownStack, hitResult);
         }
 
         this.dropAsItemAndDiscard();
@@ -141,25 +145,55 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         }
     }
 
-    private float getThrownDamage(ServerWorld serverWorld, ItemStack swordStack, net.minecraft.entity.Entity target, DamageSource source) {
-        float swordDamage = getSwordAttackDamage(swordStack);
+    private float getThrownDamage(ServerWorld serverWorld, ItemStack thrownStack, net.minecraft.entity.Entity target, DamageSource source) {
+        float itemDamage = getThrownBaseDamage(thrownStack);
         float speed = (float)this.getVelocity().length();
         float velocityMultiplier = VELOCITY_DAMAGE_BASE + speed * VELOCITY_DAMAGE_FACTOR;
-        float damage = swordDamage * velocityMultiplier;
+        float damage = itemDamage * velocityMultiplier;
 
         if (!this.hitBlock) {
             damage *= CLEAN_FLIGHT_DAMAGE_BONUS;
         }
 
-        return EnchantmentHelper.getDamage(serverWorld, swordStack, target, source, damage);
+        return EnchantmentHelper.getDamage(serverWorld, thrownStack, target, source, damage);
     }
 
-    private static float getSwordAttackDamage(ItemStack swordStack) {
+    private static float getThrownBaseDamage(ItemStack thrownStack) {
+        float attackDamage = getMainHandAttackDamage(thrownStack);
+
+        if (thrownStack.isIn(ItemTags.SWORDS)) {
+            return attackDamage;
+        }
+
+        if (thrownStack.isIn(ItemTags.AXES)) {
+            return Math.max(3.5F, attackDamage * 0.75F);
+        }
+
+        if (thrownStack.isIn(ItemTags.PICKAXES)) {
+            return Math.max(2.0F, attackDamage * 0.6F);
+        }
+
+        if (thrownStack.isIn(ItemTags.SHOVELS) || thrownStack.isIn(ItemTags.HOES)) {
+            return Math.max(1.25F, attackDamage * 0.5F);
+        }
+
+        if (thrownStack.getItem() instanceof BlockItem) {
+            return BLOCK_BASE_DAMAGE;
+        }
+
+        if (thrownStack.isDamageable()) {
+            return Math.max(1.0F, attackDamage * 0.4F);
+        }
+
+        return MISC_BASE_DAMAGE;
+    }
+
+    private static float getMainHandAttackDamage(ItemStack thrownStack) {
         final float[] additive = new float[] {BASE_HAND_DAMAGE};
         final float[] multipliedBase = new float[] {0.0F};
         final float[] multipliedTotal = new float[] {1.0F};
 
-        swordStack.applyAttributeModifiers(EquipmentSlot.MAINHAND, (attribute, modifier) -> {
+        thrownStack.applyAttributeModifiers(EquipmentSlot.MAINHAND, (attribute, modifier) -> {
             if (!attribute.equals(EntityAttributes.ATTACK_DAMAGE)) {
                 return;
             }
@@ -176,7 +210,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         return (additive[0] + BASE_HAND_DAMAGE * multipliedBase[0]) * multipliedTotal[0];
     }
 
-    private void applySwordHitEffects(ServerWorld serverWorld, ItemStack swordStack, EntityHitResult hitResult) {
+    private void applyThrownHitEffects(ServerWorld serverWorld, ItemStack thrownStack, EntityHitResult hitResult) {
         if (!(this.getOwner() instanceof LivingEntity attacker) || !(hitResult.getEntity() instanceof LivingEntity target)) {
             return;
         }
@@ -187,15 +221,15 @@ public class ThrownSwordEntity extends ThrownItemEntity {
             serverWorld.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getEntry(
                 serverWorld.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getValueOrThrow(Enchantments.FIRE_ASPECT)
             ),
-            swordStack
+            thrownStack
         );
         if (fireAspectLevel > 0) {
             target.setOnFireForTicks(fireAspectLevel * 80);
         }
 
-        EnchantmentHelper.onTargetDamaged(serverWorld, target, this.getDamageSources().thrown(this, attacker), swordStack);
-        swordStack.postHit(target, attacker);
-        swordStack.postDamageEntity(target, attacker);
+        EnchantmentHelper.onTargetDamaged(serverWorld, target, this.getDamageSources().thrown(this, attacker), thrownStack);
+        thrownStack.postHit(target, attacker);
+        thrownStack.postDamageEntity(target, attacker);
     }
 
     private void dropAsItemAndDiscard() {
@@ -209,7 +243,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
             return;
         }
 
-        ItemStack stack = this.getStack().copyWithCount(1);
+        ItemStack stack = this.getStack().copy();
         if (!stack.isEmpty()) {
             this.dropStack(serverWorld, stack, 0.1F);
         }

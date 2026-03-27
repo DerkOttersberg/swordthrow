@@ -7,8 +7,9 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.Hand;
+import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,12 +27,12 @@ public class SwordThrowMod implements ModInitializer {
         ModEntities.register();
         PayloadTypeRegistry.playC2S().register(ThrowSwordPayload.ID, ThrowSwordPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(ThrowSwordPayload.ID, (payload, context) ->
-            context.server().execute(() -> tryThrowSword(context.player(), payload.chargeTicks()))
+            context.server().execute(() -> tryThrowItem(context.player(), payload.chargeTicks()))
         );
         LOGGER.info("Sword Throw initialized");
     }
 
-    private static void tryThrowSword(ServerPlayerEntity player, int rawChargeTicks) {
+    private static void tryThrowItem(ServerPlayerEntity player, int rawChargeTicks) {
         if (player == null || !player.isAlive() || player.isSpectator()) {
             return;
         }
@@ -43,7 +44,7 @@ public class SwordThrowMod implements ModInitializer {
         }
 
         ItemStack held = player.getMainHandStack();
-        if (!held.isIn(ItemTags.SWORDS)) {
+        if (held.isEmpty()) {
             return;
         }
 
@@ -51,9 +52,9 @@ public class SwordThrowMod implements ModInitializer {
             return;
         }
 
-        ItemStack thrownStack = held.copyWithCount(1);
+        ItemStack thrownStack = held.copy();
         if (!player.getAbilities().creativeMode) {
-            held.decrement(1);
+            player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
         }
 
         float chargeProgress = chargeTicks / 30.0F;

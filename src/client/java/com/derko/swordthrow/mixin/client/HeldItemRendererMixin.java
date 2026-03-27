@@ -6,7 +6,6 @@ import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.item.HeldItemRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Hand;
 import org.spongepowered.asm.mixin.Mixin;
@@ -28,7 +27,7 @@ public abstract class HeldItemRendererMixin {
     private void swordthrow$applyThrowPoseInScope(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item, float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
         if (player.isInvisible()) return;
 
-        if (hand == Hand.MAIN_HAND && !item.isEmpty() && item.isIn(ItemTags.SWORDS)) {
+        if (hand == Hand.MAIN_HAND && !item.isEmpty()) {
             ThrowPoseState.applyMainHandPose(player, matrices, tickDelta);
             return;
         }

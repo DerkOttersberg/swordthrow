@@ -5,24 +5,17 @@ import com.derko.swordthrow.entity.ModEntities;
 import com.derko.swordthrow.network.ThrowSwordPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.option.KeyBinding;
-import net.minecraft.client.util.InputUtil;
-import net.minecraft.registry.tag.ItemTags;
-import net.minecraft.util.Identifier;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.item.ItemStack;
 
 public class SwordThrowClient implements ClientModInitializer {
     private static final int MAX_CHARGE_TICKS = 30;
-    private static final int CHARGE_BAR_WIDTH = 44;
-    private static final int CHARGE_BAR_HEIGHT = 5;
-    private static final KeyBinding THROW_KEY = KeyBindingHelper.registerKeyBinding(
-        new KeyBinding("key.swordthrow.throw", InputUtil.Type.KEYSYM, GLFW.GLFW_KEY_R, KeyBinding.Category.create(Identifier.of("swordthrow", "controls")))
-    );
+    private static final int CHARGE_BAR_WIDTH = 24;
+    private static final int CHARGE_BAR_HEIGHT = 3;
 
     private static boolean charging;
     private static int chargeTicks;
@@ -43,10 +36,11 @@ public class SwordThrowClient implements ClientModInitializer {
                 return;
             }
 
-            boolean keyDown = THROW_KEY.isPressed();
-            boolean holdingSword = client.player.getMainHandStack().isIn(ItemTags.SWORDS);
+            ItemStack heldStack = client.player.getMainHandStack();
+            boolean keyDown = client.options.dropKey.isPressed() && client.currentScreen == null;
+            boolean canThrowHeldItem = canThrow(heldStack) && !client.player.getItemCooldownManager().isCoolingDown(heldStack);
 
-            if (keyDown && holdingSword) {
+            if (keyDown && canThrowHeldItem) {
                 if (!charging) {
                     charging = true;
                     chargeTicks = 0;
@@ -89,5 +83,18 @@ public class SwordThrowClient implements ClientModInitializer {
         drawContext.fill(left - 1, top - 1, right + 1, bottom + 1, 0xAA111111);
         drawContext.fill(left, top, right, bottom, 0xCC2A2A2A);
         drawContext.fill(left + 1, top + 1, left + 1 + fillWidth, bottom - 1, fillColor);
+    }
+
+    public static boolean canThrow(ItemStack stack) {
+        return !stack.isEmpty();
+    }
+
+    public static boolean shouldInterceptDropKey(MinecraftClient client) {
+        return client != null
+            && client.currentScreen == null
+            && client.player != null
+            && client.player.isAlive()
+            && !client.player.isSpectator()
+            && canThrow(client.player.getMainHandStack());
     }
 }

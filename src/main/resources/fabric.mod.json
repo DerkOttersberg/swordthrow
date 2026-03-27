@@ -3,7 +3,7 @@
 	"id": "swordthrow",
 	"version": "${version}",
 	"name": "Sword Throw",
-	"description": "Throw your currently held sword with R using a heavy curved projectile arc and first-person throw pose animation.",
+	"description": "Hold Q to throw your currently held item or full stack with a charge-up arc and first-person throw pose animation.",
 	"authors": [
 		"derko"
 	],
