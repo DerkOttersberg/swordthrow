@@ -106,7 +106,7 @@ public final class ThrowPoseState {
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-14.0F * hidden - 14.0F * extend + 2.5F * pose.offSwayRoll())));
     }
 
-    public static void applyThirdPersonOffHandPose(PlayerEntityRenderState renderState, Arm offArmSide, ModelPart offArm, ModelPart offSleeve) {
+    public static void applyThirdPersonOffHandPose(PlayerEntityRenderState renderState, Arm offArmSide, ModelPart offArm) {
         if (offArmSide == null) {
             return;
         }
@@ -126,13 +126,9 @@ public final class ThrowPoseState {
         offArm.pitch += armPitch;
         offArm.yaw += armYaw;
         offArm.roll += armRoll;
-
-        if (offSleeve != null) {
-            syncOverlayToArm(offSleeve, offArm);
-        }
     }
 
-    public static void applyThirdPersonMainHandPose(PlayerEntityRenderState renderState, Arm mainArmSide, ModelPart mainArm, ModelPart mainSleeve) {
+    public static void applyThirdPersonMainHandPose(PlayerEntityRenderState renderState, Arm mainArmSide, ModelPart mainArm) {
         if (mainArmSide == null) {
             return;
         }
@@ -150,16 +146,6 @@ public final class ThrowPoseState {
         mainArm.pitch += armPitch;
         mainArm.yaw += armYaw;
         mainArm.roll += armRoll;
-
-        if (mainSleeve != null) {
-            syncOverlayToArm(mainSleeve, mainArm);
-        }
-    }
-
-    private static void syncOverlayToArm(ModelPart overlay, ModelPart arm) {
-        overlay.pitch = arm.pitch * 1.9F;
-        overlay.yaw = -arm.yaw;
-        overlay.roll = -arm.roll;
     }
 
     private static float getChargeProgress(float tickDelta) {
