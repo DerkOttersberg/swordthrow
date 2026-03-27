@@ -25,8 +25,12 @@ public abstract class PlayerEntityModelMixin {
         }
 
         Arm offArm = state.preferredArm;
+        Arm mainArm = offArm.getOpposite();
+        ModelPart mainArmPart = ((BipedEntityModel<PlayerEntityRenderState>) (Object) this).getArm(mainArm);
         ModelPart offArmPart = ((BipedEntityModel<PlayerEntityRenderState>) (Object) this).getArm(offArm);
+        ModelPart mainSleevePart = mainArm == Arm.RIGHT ? this.rightSleeve : this.leftSleeve;
         ModelPart offSleevePart = offArm == Arm.RIGHT ? this.rightSleeve : this.leftSleeve;
+        ThrowPoseState.applyThirdPersonMainHandPose(state, mainArm, mainArmPart, mainSleevePart);
         ThrowPoseState.applyThirdPersonOffHandPose(state, offArm, offArmPart, offSleevePart);
     }
 }

@@ -119,19 +119,47 @@ public final class ThrowPoseState {
 
         float side = pose.offHandSide();
         float recoil = pose.offHandRecoil();
-        float armPitch = -1.52F * support + 0.26F * recoil;
-        float armYaw = side * (0.66F * support - 0.10F * recoil);
-        float armRoll = side * (-0.16F * support + 0.04F * recoil);
+        float armPitch = -1.35F * support + 0.24F * recoil;
+        float armYaw = side * (-0.42F * support + 0.08F * recoil);
+        float armRoll = side * (-0.10F * support + 0.03F * recoil);
 
         offArm.pitch += armPitch;
         offArm.yaw += armYaw;
         offArm.roll += armRoll;
 
         if (offSleeve != null) {
-            offSleeve.pitch += armPitch;
-            offSleeve.yaw += armYaw;
-            offSleeve.roll += armRoll;
+            syncOverlayToArm(offSleeve, offArm);
         }
+    }
+
+    public static void applyThirdPersonMainHandPose(PlayerEntityRenderState renderState, Arm mainArmSide, ModelPart mainArm, ModelPart mainSleeve) {
+        if (mainArmSide == null) {
+            return;
+        }
+
+        PoseSample pose = sample(renderState.age, mainArmSide, renderState.age - MathHelper.floor(renderState.age));
+        if (pose.windUp() <= 0.001F && pose.release() <= 0.001F) {
+            return;
+        }
+
+        float side = pose.side();
+        float armPitch = -1.56F * pose.windUp() + 0.44F * pose.release() - 0.05F * pose.mainSwayLift();
+        float armYaw = side * (0.18F * pose.windUp() - 0.08F * pose.release() + 0.04F * pose.mainSwaySide());
+        float armRoll = side * (-0.18F * pose.windUp() + 0.12F * pose.release() + 0.04F * pose.mainSwayRoll());
+
+        mainArm.pitch += armPitch;
+        mainArm.yaw += armYaw;
+        mainArm.roll += armRoll;
+
+        if (mainSleeve != null) {
+            syncOverlayToArm(mainSleeve, mainArm);
+        }
+    }
+
+    private static void syncOverlayToArm(ModelPart overlay, ModelPart arm) {
+        overlay.pitch = arm.pitch * 1.9F;
+        overlay.yaw = -arm.yaw;
+        overlay.roll = -arm.roll;
     }
 
     private static float getChargeProgress(float tickDelta) {
