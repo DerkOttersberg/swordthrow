@@ -1,5 +1,6 @@
 package com.derko.swordthrow.mixin.client;
 
+import com.derko.swordthrow.client.config.SwordThrowClientConfig;
 import com.derko.swordthrow.client.ThrowPoseState;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.entity.model.BipedEntityModel;
@@ -16,6 +17,10 @@ public abstract class PlayerEntityModelMixin {
 
     @Inject(method = "setAngles(Lnet/minecraft/client/render/entity/state/PlayerEntityRenderState;)V", at = @At("TAIL"))
     private void swordthrow$applyThirdPersonChargePose(PlayerEntityRenderState state, CallbackInfo ci) {
+        if (!SwordThrowClientConfig.get().thirdPersonAnimationsEnabled()) {
+            return;
+        }
+
         if (state.preferredArm == null) {
             return;
         }

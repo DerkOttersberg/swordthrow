@@ -19,6 +19,9 @@
 		],
 		"client": [
 			"com.derko.swordthrow.client.SwordThrowClient"
+		],
+		"modmenu": [
+			"com.derko.swordthrow.client.config.SwordThrowModMenuIntegration"
 		]
 	},
 	"mixins": [
@@ -34,6 +37,7 @@
 		"fabric-api": "*"
 	},
 	"suggests": {
-		"another-mod": "*"
+		"another-mod": "*",
+		"modmenu": "*"
 	}
 }

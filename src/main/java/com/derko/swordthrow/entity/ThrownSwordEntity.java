@@ -51,6 +51,8 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     private static final float VELOCITY_DAMAGE_FACTOR = 0.7F;
     private static final float VELOCITY_DAMAGE_BASE = 0.65F;
     private static final float CLEAN_FLIGHT_DAMAGE_BONUS = 1.35F;
+    private static final float SPEAR_DAMAGE_MULTIPLIER = 1.45F;
+    private static final float SPEAR_DAMAGE_FLAT_BONUS = 2.5F;
     private static final float BLOCK_BASE_DAMAGE = 0.35F;
     private static final float MISC_BASE_DAMAGE = 0.6F;
     private static final float FLIGHT_SPIN_SPEED = 34.0F;
@@ -312,6 +314,11 @@ public class ThrownSwordEntity extends ThrownItemEntity {
 
     private static float getThrownBaseDamage(ItemStack thrownStack) {
         float attackDamage = getMainHandAttackDamage(thrownStack);
+
+        if (isPointFirstFlightWeapon(thrownStack)) {
+            float swordBaseline = Math.max(attackDamage, 4.0F);
+            return Math.max(swordBaseline * SPEAR_DAMAGE_MULTIPLIER, swordBaseline + SPEAR_DAMAGE_FLAT_BONUS);
+        }
 
         if (thrownStack.isIn(ItemTags.SWORDS)) {
             return attackDamage;

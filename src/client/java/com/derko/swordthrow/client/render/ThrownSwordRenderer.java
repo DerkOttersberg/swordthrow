@@ -1,5 +1,10 @@
 package com.derko.swordthrow.client.render;
 
+import com.derko.seamlessapi.api.visual.SeamlessVec3;
+import com.derko.seamlessapi.api.visual.SpinTumbleAnimator;
+import com.derko.seamlessapi.api.visual.ThrownItemVisualProfile;
+import com.derko.seamlessapi.api.visual.TrailMath;
+import com.derko.swordthrow.client.config.SwordThrowClientConfig;
 import com.derko.swordthrow.SwordThrowMod;
 import java.util.ArrayList;
 import com.derko.swordthrow.entity.ThrownSwordEntity;
@@ -33,52 +38,12 @@ import net.minecraft.util.math.Vec3d;
 public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, ThrownSwordRenderer.ThrownSwordRenderState> {
     private static final Identifier TRAIL_TEXTURE = SwordThrowMod.id("textures/effect/sword_trail.png");
     private static final RenderLayer TRAIL_LAYER = RenderLayers.entityTranslucentEmissive(TRAIL_TEXTURE);
-    private static final int TRAIL_COLOR = 0xD4A63A;
     private static final float OUTER_TRAIL_WIDTH = 0.15F;
     private static final float INNER_TRAIL_WIDTH = OUTER_TRAIL_WIDTH / 1.5F;
     private static final int TRAIL_SUBDIVISIONS = 4;
-    private static final float THROWN_SWORD_SCALE = 0.96F;
-    private static final float SMALL_THROWN_ITEM_SCALE = 0.72F;
-    private static final float POINT_FIRST_PITCH_BIAS = -45.0F;
-    private static final float FLIGHT_SPIN_SPEED = 34.0F;
-    private static final int TUMBLE_DURATION_TICKS = 14;
-    private static final double TUMBLE_TRIGGER_DOT = 0.55D;
-    private static final double TUMBLE_MIN_SPEED_SQUARED = 0.16D;
-    private static final double RESTING_SPEED_SQUARED = 0.0025D;
-    private static final String[] SMALL_INGREDIENT_PATHS = {
-        "egg",
-        "sugar",
-        "wheat",
-        "wheat_seeds",
-        "beetroot_seeds",
-        "melon_seeds",
-        "pumpkin_seeds",
-        "cocoa_beans",
-        "nether_wart",
-        "brown_mushroom",
-        "red_mushroom",
-        "kelp",
-        "dried_kelp",
-        "sweet_berries",
-        "glow_berries",
-        "rabbit_foot",
-        "rabbit_hide",
-        "spider_eye",
-        "fermented_spider_eye",
-        "slime_ball",
-        "magma_cream",
-        "ghast_tear",
-        "blaze_powder",
-        "blaze_rod",
-        "bone_meal",
-        "paper",
-        "gunpowder",
-        "prismarine_shard",
-        "prismarine_crystals",
-        "nautilus_shell"
-    };
+    private static final ThrownItemVisualProfile VISUAL_PROFILE = ThrownItemVisualProfile.swordthrowDefaults();
+    private static final SpinTumbleAnimator SPIN_ANIMATOR = SpinTumbleAnimator.swordthrowDefaults();
     private static final Map<Integer, Integer> LAST_TWINKLE_AGE = new HashMap<>();
-    private static final Map<Integer, SpinState> SPIN_STATES = new HashMap<>();
     private final ItemModelManager itemModelManager;
 
     public ThrownSwordRenderer(EntityRendererFactory.Context context) {
@@ -95,7 +60,8 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
         matrices.push();
 
-        if (!state.embedded && state.trailPoints.size() > 1) {
+        boolean trailEnabled = SwordThrowClientConfig.get().trailEffectEnabled();
+        if (trailEnabled && !state.embedded && state.trailPoints.size() > 1) {
             renderTrail(state, matrices, queue, cameraState, OUTER_TRAIL_WIDTH, 0.95F);
             renderTrail(state, matrices, queue, cameraState, INNER_TRAIL_WIDTH, 0.63F);
             spawnTrailTwinkle(state);
@@ -103,7 +69,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
         if (state.pointFirstFlight) {
             matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.flightYaw + 90.0F));
-            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-state.flightPitch + 90.0F + POINT_FIRST_PITCH_BIAS));
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-state.flightPitch + 90.0F + VISUAL_PROFILE.pointFirstPitchBias()));
         } else {
             matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.flightYaw + 90.0F));
             matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-state.flightPitch + 90.0F));
@@ -146,7 +112,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
             state.roll = entity.getEmbeddedRoll();
             state.tumbleYaw = 0.0F;
             state.tumblePitch = 0.0F;
-            SPIN_STATES.remove(state.entityId);
+            SPIN_ANIMATOR.clear(state.entityId);
             return;
         }
 
@@ -154,74 +120,23 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
             state.roll = 0.0F;
             state.tumbleYaw = 0.0F;
             state.tumblePitch = 0.0F;
-            SPIN_STATES.remove(state.entityId);
+            SPIN_ANIMATOR.clear(state.entityId);
             return;
         }
 
-        updateSpinState(state, velocity, tickDelta);
-    }
-
-    private static void updateSpinState(ThrownSwordRenderState state, Vec3d velocity, float tickDelta) {
-        SpinState spinState = SPIN_STATES.computeIfAbsent(state.entityId, ignored -> new SpinState());
-        if (spinState.lastProcessedAge != state.entityAge) {
-            advanceSpinState(spinState, state, velocity);
-            spinState.lastProcessedAge = state.entityAge;
-        }
-
-        float partialTicks = tickDelta;
-        state.roll = spinState.baseRoll + spinState.rollSpeed * partialTicks;
-        state.tumbleYaw = spinState.baseYaw + spinState.yawSpeed * partialTicks;
-        state.tumblePitch = spinState.basePitch + spinState.pitchSpeed * partialTicks;
-    }
-
-    private static void advanceSpinState(SpinState spinState, ThrownSwordRenderState state, Vec3d velocity) {
-        double speedSquared = velocity.lengthSquared();
-        if (speedSquared < RESTING_SPEED_SQUARED) {
-            spinState.rollSpeed = 0.0F;
-            spinState.yawSpeed = 0.0F;
-            spinState.pitchSpeed = 0.0F;
-            spinState.tumbleTicksRemaining = 0;
-            return;
-        }
-
-        if (spinState.lastVelocity.lengthSquared() >= TUMBLE_MIN_SPEED_SQUARED && speedSquared >= TUMBLE_MIN_SPEED_SQUARED) {
-            double alignment = spinState.lastVelocity.normalize().dotProduct(velocity.normalize());
-            if (alignment < TUMBLE_TRIGGER_DOT) {
-                spinState.tumbleTicksRemaining = TUMBLE_DURATION_TICKS;
-                spinState.rollSpeed = randomSigned(state.entityId, state.entityAge, 0) * 24.0F;
-                spinState.yawSpeed = randomSigned(state.entityId, state.entityAge, 1) * 42.0F;
-                spinState.pitchSpeed = randomSigned(state.entityId, state.entityAge, 2) * 42.0F;
-            }
-        }
-
-        if (spinState.tumbleTicksRemaining > 0) {
-            spinState.baseRoll += spinState.rollSpeed;
-            spinState.baseYaw += spinState.yawSpeed;
-            spinState.basePitch += spinState.pitchSpeed;
-            spinState.rollSpeed *= 0.9F;
-            spinState.yawSpeed *= 0.9F;
-            spinState.pitchSpeed *= 0.9F;
-            spinState.tumbleTicksRemaining--;
-        } else {
-            spinState.baseRoll += FLIGHT_SPIN_SPEED;
-            spinState.baseYaw *= 0.75F;
-            spinState.basePitch *= 0.75F;
-            spinState.yawSpeed = 0.0F;
-            spinState.pitchSpeed = 0.0F;
-            spinState.rollSpeed = FLIGHT_SPIN_SPEED;
-        }
-
-        spinState.lastVelocity = velocity;
-    }
-
-    private static float randomSigned(int entityId, int entityAge, int salt) {
-        int hash = entityId * 73428767 ^ entityAge * 9122713 ^ salt * 19349663;
-        hash ^= hash >>> 16;
-        return ((hash & 0xFFFF) / 32767.5F) - 1.0F;
+        SpinTumbleAnimator.Orientation orientation = SPIN_ANIMATOR.sample(
+            state.entityId,
+            state.entityAge,
+            fromMinecraftVec(velocity),
+            tickDelta
+        );
+        state.roll = orientation.roll();
+        state.tumbleYaw = orientation.tumbleYaw();
+        state.tumblePitch = orientation.tumblePitch();
     }
 
     private static float getThrownRenderScale(ItemStack stack) {
-        return isSmallThrownItem(stack) ? SMALL_THROWN_ITEM_SCALE : THROWN_SWORD_SCALE;
+        return VISUAL_PROFILE.resolveScale(isSmallThrownItem(stack));
     }
 
     private static boolean isSmallThrownItem(ItemStack stack) {
@@ -235,13 +150,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         }
 
         String itemPath = Registries.ITEM.getId(stack.getItem()).getPath();
-        for (String ingredientPath : SMALL_INGREDIENT_PATHS) {
-            if (ingredientPath.equals(itemPath)) {
-                return true;
-            }
-        }
-
-        return false;
+        return VISUAL_PROFILE.isSmallItemPath(itemPath);
     }
 
     private static void spawnTrailTwinkle(ThrownSwordRenderState state) {
@@ -280,6 +189,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         float width,
         float alphaScale
     ) {
+        int trailColor = SwordThrowClientConfig.get().trailColor();
         queue.submitCustom(matrices, TRAIL_LAYER, (entry, consumer) -> {
             List<Vec3d> points = getSmoothedTrailPoints(state);
             if (points.size() < 2) {
@@ -293,7 +203,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
                 float progress0 = index / (float)(points.size() - 1);
                 float progress1 = (index + 1) / (float)(points.size() - 1);
-                emitTrailSegment(entry, consumer, cameraState, currentPos, point, nextPoint, width, alphaScale, progress0, progress1);
+                emitTrailSegment(entry, consumer, cameraState, currentPos, point, nextPoint, width, alphaScale, progress0, progress1, trailColor);
             }
         });
     }
@@ -303,43 +213,22 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
             return state.trailPoints;
         }
 
-        List<Vec3d> points = new ArrayList<>(state.trailPoints.size());
+        List<SeamlessVec3> sourcePoints = new ArrayList<>(state.trailPoints.size());
         for (Vec3d point : state.trailPoints) {
-            points.add(point);
+            sourcePoints.add(fromMinecraftVec(point));
         }
 
-        points.set(points.size() - 1, new Vec3d(state.x, state.y, state.z));
-
-        if (points.size() < 3) {
-            return points;
-        }
-
-        List<Vec3d> smoothed = new ArrayList<>((points.size() - 1) * TRAIL_SUBDIVISIONS + 1);
-        smoothed.add(points.getFirst());
-
-        for (int index = 0; index < points.size() - 1; index++) {
-            Vec3d previous = index > 0 ? points.get(index - 1) : points.get(index);
-            Vec3d current = points.get(index);
-            Vec3d next = points.get(index + 1);
-            Vec3d following = index + 2 < points.size() ? points.get(index + 2) : next;
-
-            for (int step = 1; step <= TRAIL_SUBDIVISIONS; step++) {
-                float delta = step / (float)TRAIL_SUBDIVISIONS;
-                smoothed.add(catmullRom(previous, current, next, following, delta));
-            }
-        }
-        return smoothed;
-    }
-
-    private static Vec3d catmullRom(Vec3d p0, Vec3d p1, Vec3d p2, Vec3d p3, float t) {
-        double t2 = t * t;
-        double t3 = t2 * t;
-
-        return new Vec3d(
-            0.5D * ((2.0D * p1.x) + (-p0.x + p2.x) * t + (2.0D * p0.x - 5.0D * p1.x + 4.0D * p2.x - p3.x) * t2 + (-p0.x + 3.0D * p1.x - 3.0D * p2.x + p3.x) * t3),
-            0.5D * ((2.0D * p1.y) + (-p0.y + p2.y) * t + (2.0D * p0.y - 5.0D * p1.y + 4.0D * p2.y - p3.y) * t2 + (-p0.y + 3.0D * p1.y - 3.0D * p2.y + p3.y) * t3),
-            0.5D * ((2.0D * p1.z) + (-p0.z + p2.z) * t + (2.0D * p0.z - 5.0D * p1.z + 4.0D * p2.z - p3.z) * t2 + (-p0.z + 3.0D * p1.z - 3.0D * p2.z + p3.z) * t3)
+        List<SeamlessVec3> smoothed = TrailMath.smoothCatmullRom(
+            sourcePoints,
+            TRAIL_SUBDIVISIONS,
+            new SeamlessVec3(state.x, state.y, state.z)
         );
+
+        List<Vec3d> converted = new ArrayList<>(smoothed.size());
+        for (SeamlessVec3 point : smoothed) {
+            converted.add(toMinecraftVec(point));
+        }
+        return converted;
     }
 
     private static void emitTrailSegment(
@@ -352,7 +241,8 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         float width,
         float alphaScale,
         float progress0,
-        float progress1
+        float progress1,
+        int trailColor
     ) {
         Vec3d startToEnd = worldEnd.subtract(worldStart);
         if (startToEnd.lengthSquared() < 1.0E-5D) {
@@ -372,8 +262,8 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         }
 
         side = side.normalize();
-        Vec3d sideStart = side.multiply(trailWidth(width, progress0));
-        Vec3d sideEnd = side.multiply(trailWidth(width, progress1));
+        Vec3d sideStart = side.multiply(TrailMath.widthAtProgress(width, progress0));
+        Vec3d sideEnd = side.multiply(TrailMath.widthAtProgress(width, progress1));
 
         Vec3d start = worldStart.subtract(origin);
         Vec3d end = worldEnd.subtract(origin);
@@ -382,22 +272,22 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         Vec3d endLeft = end.add(sideEnd);
         Vec3d endRight = end.subtract(sideEnd);
 
-        int alphaStart = Math.max(0, Math.round(255.0F * trailAlpha(alphaScale, progress0)));
-        int alphaEnd = Math.max(0, Math.round(255.0F * trailAlpha(alphaScale, progress1)));
+        int alphaStart = Math.max(0, Math.round(255.0F * TrailMath.alphaAtProgress(alphaScale, progress0)));
+        int alphaEnd = Math.max(0, Math.round(255.0F * TrailMath.alphaAtProgress(alphaScale, progress1)));
         int light = LightmapTextureManager.MAX_LIGHT_COORDINATE;
 
-        putVertex(consumer, entry, startLeft, TRAIL_COLOR, alphaStart, 0.0F, progress0, light);
-        putVertex(consumer, entry, endLeft, TRAIL_COLOR, alphaEnd, 0.0F, progress1, light);
-        putVertex(consumer, entry, endRight, TRAIL_COLOR, alphaEnd, 1.0F, progress1, light);
-        putVertex(consumer, entry, startRight, TRAIL_COLOR, alphaStart, 1.0F, progress0, light);
+        putVertex(consumer, entry, startLeft, trailColor, alphaStart, 0.0F, progress0, light);
+        putVertex(consumer, entry, endLeft, trailColor, alphaEnd, 0.0F, progress1, light);
+        putVertex(consumer, entry, endRight, trailColor, alphaEnd, 1.0F, progress1, light);
+        putVertex(consumer, entry, startRight, trailColor, alphaStart, 1.0F, progress0, light);
     }
 
-    private static float trailWidth(float baseWidth, float progress) {
-        return (float)Math.sqrt(Math.max(progress, 0.0F)) * baseWidth;
+    private static SeamlessVec3 fromMinecraftVec(Vec3d vec) {
+        return new SeamlessVec3(vec.x, vec.y, vec.z);
     }
 
-    private static float trailAlpha(float alphaScale, float progress) {
-        return (float)Math.cbrt(Math.max(0.0F, alphaScale * progress - 0.1F));
+    private static Vec3d toMinecraftVec(SeamlessVec3 vec) {
+        return new Vec3d(vec.x(), vec.y(), vec.z());
     }
 
     private static void putVertex(VertexConsumer consumer, MatrixStack.Entry entry, Vec3d position, int color, int alpha, float u, float v, int light) {
@@ -418,22 +308,10 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         public float flightYaw;
         public float flightPitch;
         public float roll;
-        public float renderScale = THROWN_SWORD_SCALE;
+        public float renderScale = VISUAL_PROFILE.thrownItemScale();
         public float tumbleYaw;
         public float tumblePitch;
         public double velocitySquared;
         public List<Vec3d> trailPoints = Collections.emptyList();
-    }
-
-    private static final class SpinState {
-        private Vec3d lastVelocity = Vec3d.ZERO;
-        private int lastProcessedAge = Integer.MIN_VALUE;
-        private int tumbleTicksRemaining;
-        private float baseRoll;
-        private float baseYaw;
-        private float basePitch;
-        private float rollSpeed = FLIGHT_SPIN_SPEED;
-        private float yawSpeed;
-        private float pitchSpeed;
     }
 }

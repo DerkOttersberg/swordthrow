@@ -1,5 +1,6 @@
 package com.derko.swordthrow.client;
 
+import com.derko.swordthrow.client.config.SwordThrowClientConfig;
 import com.derko.swordthrow.client.render.ThrownSwordRenderer;
 import com.derko.swordthrow.entity.ModEntities;
 import com.derko.swordthrow.network.ThrowSwordPayload;
@@ -25,6 +26,7 @@ public class SwordThrowClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        SwordThrowClientConfig.load();
         EntityRendererRegistry.register(ModEntities.THROWN_SWORD, ThrownSwordRenderer::new);
 
         HudRenderCallback.EVENT.register((drawContext, tickCounter) -> renderChargeBar(drawContext));
