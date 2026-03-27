@@ -19,6 +19,8 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
+import net.minecraft.item.TridentItem;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.world.ServerWorld;
@@ -36,7 +38,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     private static final double WALL_VERTICAL_DAMPING = 0.92D;
     private static final double MIN_BOUNCE_SPEED_SQUARED = 0.18D * 0.18D;
     private static final double BOUNCE_SURFACE_OFFSET = 0.08D;
-    private static final double EMBED_DEPTH = 0.02D;
+    private static final double EMBED_DEPTH = 0.012D;
     private static final double EMBED_MIN_SPEED_SQUARED = 0.42D * 0.42D;
     private static final double EMBED_HEAD_ON_THRESHOLD = 0.24D;
     private static final float EMBEDDED_ROLL_THRESHOLD = 0.38F;
@@ -215,6 +217,10 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         return (this.getId() * 57.0F) % 360.0F;
     }
 
+    public boolean usesPointFirstFlight() {
+        return isPointFirstFlightWeapon(this.getStack());
+    }
+
     private void recordTrailPoint() {
         this.trailPoints.addLast(new Vec3d(this.getX(), this.getY(), this.getZ()));
         while (this.trailPoints.size() > MAX_TRAIL_POINTS) {
@@ -222,12 +228,30 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         }
     }
 
+    private static boolean isPointFirstFlightWeapon(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+
+        Item item = stack.getItem();
+        if (item instanceof TridentItem || item == Items.TRIDENT) {
+            return true;
+        }
+
+        String itemPath = Registries.ITEM.getId(item).getPath();
+        return itemPath.contains("spear") || itemPath.contains("javelin");
+    }
+
     private boolean canEmbedInBlock() {
         ItemStack stack = this.getStack();
-        return stack.isIn(ItemTags.SWORDS) || stack.isIn(ItemTags.AXES);
+        return stack.isIn(ItemTags.SWORDS) || stack.isIn(ItemTags.AXES) || isPointFirstFlightWeapon(stack);
     }
 
     private boolean shouldEmbedInBlock(Vec3d velocity, Vec3d normal) {
+        if (this.usesPointFirstFlight()) {
+            return true;
+        }
+
         double speedSquared = velocity.lengthSquared();
         if (speedSquared < EMBED_MIN_SPEED_SQUARED) {
             return false;

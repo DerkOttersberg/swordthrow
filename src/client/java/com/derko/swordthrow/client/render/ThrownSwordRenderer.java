@@ -35,6 +35,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
     private static final float INNER_TRAIL_WIDTH = OUTER_TRAIL_WIDTH / 1.5F;
     private static final int TRAIL_SUBDIVISIONS = 4;
     private static final float THROWN_SWORD_SCALE = 0.96F;
+    private static final float POINT_FIRST_PITCH_BIAS = -45.0F;
     private static final float FLIGHT_SPIN_SPEED = 34.0F;
     private static final int TUMBLE_DURATION_TICKS = 14;
     private static final double TUMBLE_TRIGGER_DOT = 0.55D;
@@ -64,11 +65,16 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
             spawnTrailTwinkle(state);
         }
 
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.flightYaw + 90.0F));
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-state.flightPitch + 90.0F));
-        matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(state.roll));
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.tumbleYaw));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(state.tumblePitch));
+        if (state.pointFirstFlight) {
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.flightYaw + 90.0F));
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-state.flightPitch + 90.0F + POINT_FIRST_PITCH_BIAS));
+        } else {
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.flightYaw + 90.0F));
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(-state.flightPitch + 90.0F));
+            matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(state.roll));
+            matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.tumbleYaw));
+            matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(state.tumblePitch));
+        }
         matrices.scale(THROWN_SWORD_SCALE, THROWN_SWORD_SCALE, THROWN_SWORD_SCALE);
 
         state.itemRenderState.render(matrices, queue, state.light, OverlayTexture.DEFAULT_UV, state.outlineColor);
@@ -87,6 +93,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         super.updateRenderState(entity, state, tickDelta);
         this.itemModelManager.updateForNonLivingEntity(state.itemRenderState, entity.getStack(), ItemDisplayContext.FIXED, entity);
         state.embedded = entity.isEmbedded();
+        state.pointFirstFlight = entity.usesPointFirstFlight();
         state.trailPoints = state.embedded ? Collections.emptyList() : entity.getTrailPoints();
 
         Vec3d velocity = entity.getVelocity();
@@ -100,6 +107,14 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
 
         if (state.embedded) {
             state.roll = entity.getEmbeddedRoll();
+            state.tumbleYaw = 0.0F;
+            state.tumblePitch = 0.0F;
+            SPIN_STATES.remove(state.entityId);
+            return;
+        }
+
+        if (state.pointFirstFlight) {
+            state.roll = 0.0F;
             state.tumbleYaw = 0.0F;
             state.tumblePitch = 0.0F;
             SPIN_STATES.remove(state.entityId);
@@ -336,6 +351,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
     public static class ThrownSwordRenderState extends EntityRenderState {
         public final ItemRenderState itemRenderState = new ItemRenderState();
         public boolean embedded;
+        public boolean pointFirstFlight;
         public int entityId;
         public int entityAge;
         public float flightYaw;

@@ -11,6 +11,8 @@ import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
+import net.minecraft.item.TridentItem;
 
 public class SwordThrowClient implements ClientModInitializer {
     private static final int MAX_CHARGE_TICKS = 30;
@@ -89,7 +91,7 @@ public class SwordThrowClient implements ClientModInitializer {
     }
 
     public static boolean canThrow(ItemStack stack) {
-        return !stack.isEmpty();
+        return !stack.isEmpty() && !isVanillaTrident(stack);
     }
 
     public static boolean shouldInterceptDropKey(MinecraftClient client) {
@@ -117,5 +119,9 @@ public class SwordThrowClient implements ClientModInitializer {
 
         allowNextSingleItemDrop = true;
         client.player.dropSelectedItem(false);
+    }
+
+    private static boolean isVanillaTrident(ItemStack stack) {
+        return stack.getItem() instanceof TridentItem || stack.isOf(Items.TRIDENT);
     }
 }
