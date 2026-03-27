@@ -1,6 +1,8 @@
 package com.derko.swordthrow.client;
 
+import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Arm;
 import net.minecraft.util.math.MathHelper;
@@ -104,6 +106,34 @@ public final class ThrowPoseState {
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-14.0F * hidden - 14.0F * extend + 2.5F * pose.offSwayRoll())));
     }
 
+    public static void applyThirdPersonOffHandPose(PlayerEntityRenderState renderState, Arm offArmSide, ModelPart offArm, ModelPart offSleeve) {
+        if (offArmSide == null) {
+            return;
+        }
+
+        PoseSample pose = sample(renderState.age, offArmSide.getOpposite(), renderState.age - MathHelper.floor(renderState.age));
+        float support = Math.max(pose.offHandPresence(), pose.offHandExtend());
+        if (support <= 0.001F && pose.offHandRecoil() <= 0.001F) {
+            return;
+        }
+
+        float side = pose.offHandSide();
+        float recoil = pose.offHandRecoil();
+        float armPitch = -1.52F * support + 0.26F * recoil;
+        float armYaw = side * (0.66F * support - 0.10F * recoil);
+        float armRoll = side * (-0.16F * support + 0.04F * recoil);
+
+        offArm.pitch += armPitch;
+        offArm.yaw += armYaw;
+        offArm.roll += armRoll;
+
+        if (offSleeve != null) {
+            offSleeve.pitch += armPitch;
+            offSleeve.yaw += armYaw;
+            offSleeve.roll += armRoll;
+        }
+    }
+
     private static float getChargeProgress(float tickDelta) {
         return chargeDriver.get(tickDelta);
     }
@@ -122,12 +152,16 @@ public final class ThrowPoseState {
     }
 
     private static PoseSample sample(AbstractClientPlayerEntity player, Arm mainArm, float tickDelta) {
+        return sample(player.age + tickDelta, mainArm, tickDelta);
+    }
+
+    private static PoseSample sample(float age, Arm mainArm, float tickDelta) {
         float charge = ease(getChargeProgress(tickDelta));
         float release = getReleaseProgress(tickDelta);
         float releaseStrength = ease(Math.max(releaseStartCharge, charge));
         float releaseVisibility = 1.0F - release;
         float supportPresence = getSupportPresence(charge) * releaseVisibility;
-        float time = player.age + tickDelta;
+        float time = age;
         float swayWeight = supportPresence * (1.0F - release * 0.75F) * 0.55F;
         float offSwayWeight = supportPresence * (1.0F - release * 0.75F) * 0.24F;
         float mainSwaySide = MathHelper.sin(time * 0.18F) * swayWeight;

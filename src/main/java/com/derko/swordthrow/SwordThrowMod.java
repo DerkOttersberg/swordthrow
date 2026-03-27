@@ -8,6 +8,8 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Hand;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
@@ -63,8 +65,50 @@ public class SwordThrowMod implements ModInitializer {
         ThrownSwordEntity projectile = new ThrownSwordEntity(player.getEntityWorld(), player, thrownStack);
         projectile.setVelocity(player, player.getPitch(), player.getYaw(), 0.0F, throwSpeed, 0.75F);
         player.getEntityWorld().spawnEntity(projectile);
+        playThrowSound(player, projectile, chargeProgress);
 
         int cooldownTicks = 10 + Math.round(chargeProgress * 8.0F);
         player.getItemCooldownManager().set(thrownStack, cooldownTicks);
+    }
+
+    private static void playThrowSound(ServerPlayerEntity player, ThrownSwordEntity projectile, float chargeProgress) {
+        float baseVolume = 0.45F + chargeProgress * 0.3F;
+        float randomPitch = 0.92F + player.getRandom().nextFloat() * 0.12F;
+
+        player.getEntityWorld().playSound(
+            null,
+            player.getX(),
+            player.getY(),
+            player.getZ(),
+            SoundEvents.ENTITY_ARROW_SHOOT,
+            SoundCategory.PLAYERS,
+            baseVolume,
+            randomPitch
+        );
+
+        if (projectile.usesPointFirstFlight()) {
+            player.getEntityWorld().playSound(
+                null,
+                player.getX(),
+                player.getY(),
+                player.getZ(),
+                SoundEvents.ITEM_TRIDENT_THROW,
+                SoundCategory.PLAYERS,
+                0.8F + chargeProgress * 0.25F,
+                0.95F + player.getRandom().nextFloat() * 0.08F
+            );
+            return;
+        }
+
+        player.getEntityWorld().playSound(
+            null,
+            player.getX(),
+            player.getY(),
+            player.getZ(),
+            SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP,
+            SoundCategory.PLAYERS,
+            0.18F + chargeProgress * 0.16F,
+            0.8F + player.getRandom().nextFloat() * 0.15F
+        );
     }
 }

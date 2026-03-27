@@ -24,8 +24,12 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.sound.BlockSoundGroup;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.storage.ReadView;
 import net.minecraft.storage.WriteView;
+import net.minecraft.block.BlockState;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.math.Direction;
@@ -168,6 +172,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         Vec3d bouncePosition = hitResult.getPos().add(normal.multiply(BOUNCE_SURFACE_OFFSET));
         this.setPosition(bouncePosition);
         this.setVelocity(reflectedVelocity);
+        this.playBounceSound((ServerWorld)this.getEntityWorld(), hitResult, reflectedVelocity.lengthSquared());
     }
 
     @Override
@@ -282,6 +287,10 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         this.setPitch((float)Math.toDegrees(Math.atan2(direction.y, horizontalSpeed)));
         this.trailPoints.clear();
         this.trailPoints.addLast(this.embeddedPosition);
+
+        if (this.getEntityWorld() instanceof ServerWorld serverWorld) {
+            this.playEmbedSound(serverWorld, hitResult);
+        }
     }
 
     private float getImpactRollDegrees() {
@@ -389,6 +398,74 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         player.sendPickup(this, this.thrownStackCount);
         serverWorld.playSound(null, player.getX(), player.getY(), player.getZ(), net.minecraft.sound.SoundEvents.ENTITY_ITEM_PICKUP, player.getSoundCategory(), 0.2F, ((serverWorld.random.nextFloat() - serverWorld.random.nextFloat()) * 0.7F + 1.0F) * 2.0F);
         this.discard();
+    }
+
+    private void playBounceSound(ServerWorld serverWorld, BlockHitResult hitResult, double speedSquared) {
+        BlockState blockState = serverWorld.getBlockState(hitResult.getBlockPos());
+        BlockSoundGroup soundGroup = blockState.getSoundGroup();
+        float speedFactor = (float)Math.min(1.0D, Math.sqrt(speedSquared));
+
+        serverWorld.playSound(
+            null,
+            hitResult.getPos().x,
+            hitResult.getPos().y,
+            hitResult.getPos().z,
+            soundGroup.getHitSound(),
+            SoundCategory.BLOCKS,
+            0.55F + speedFactor * 0.35F,
+            0.88F + serverWorld.random.nextFloat() * 0.14F
+        );
+
+        serverWorld.playSound(
+            null,
+            hitResult.getPos().x,
+            hitResult.getPos().y,
+            hitResult.getPos().z,
+            SoundEvents.ITEM_SHIELD_BLOCK,
+            SoundCategory.PLAYERS,
+            0.18F + speedFactor * 0.18F,
+            0.9F + serverWorld.random.nextFloat() * 0.12F
+        );
+    }
+
+    private void playEmbedSound(ServerWorld serverWorld, BlockHitResult hitResult) {
+        BlockState blockState = serverWorld.getBlockState(hitResult.getBlockPos());
+        BlockSoundGroup soundGroup = blockState.getSoundGroup();
+
+        serverWorld.playSound(
+            null,
+            hitResult.getPos().x,
+            hitResult.getPos().y,
+            hitResult.getPos().z,
+            soundGroup.getPlaceSound(),
+            SoundCategory.BLOCKS,
+            0.8F,
+            0.72F + serverWorld.random.nextFloat() * 0.1F
+        );
+
+        if (this.usesPointFirstFlight()) {
+            serverWorld.playSound(
+                null,
+                hitResult.getPos().x,
+                hitResult.getPos().y,
+                hitResult.getPos().z,
+                SoundEvents.ITEM_TRIDENT_HIT_GROUND,
+                SoundCategory.PLAYERS,
+                0.65F,
+                0.9F + serverWorld.random.nextFloat() * 0.08F
+            );
+        } else {
+            serverWorld.playSound(
+                null,
+                hitResult.getPos().x,
+                hitResult.getPos().y,
+                hitResult.getPos().z,
+                SoundEvents.ITEM_SHIELD_BLOCK,
+                SoundCategory.PLAYERS,
+                0.3F,
+                0.7F + serverWorld.random.nextFloat() * 0.1F
+            );
+        }
     }
 
     private void dropAsItemAndDiscard() {

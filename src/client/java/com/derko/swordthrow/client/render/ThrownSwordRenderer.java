@@ -22,7 +22,10 @@ import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.item.ItemModelManager;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemDisplayContext;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.consume.UseAction;
 import net.minecraft.particle.ParticleTypes;
+import net.minecraft.registry.Registries;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
@@ -35,12 +38,45 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
     private static final float INNER_TRAIL_WIDTH = OUTER_TRAIL_WIDTH / 1.5F;
     private static final int TRAIL_SUBDIVISIONS = 4;
     private static final float THROWN_SWORD_SCALE = 0.96F;
+    private static final float SMALL_THROWN_ITEM_SCALE = 0.72F;
     private static final float POINT_FIRST_PITCH_BIAS = -45.0F;
     private static final float FLIGHT_SPIN_SPEED = 34.0F;
     private static final int TUMBLE_DURATION_TICKS = 14;
     private static final double TUMBLE_TRIGGER_DOT = 0.55D;
     private static final double TUMBLE_MIN_SPEED_SQUARED = 0.16D;
     private static final double RESTING_SPEED_SQUARED = 0.0025D;
+    private static final String[] SMALL_INGREDIENT_PATHS = {
+        "egg",
+        "sugar",
+        "wheat",
+        "wheat_seeds",
+        "beetroot_seeds",
+        "melon_seeds",
+        "pumpkin_seeds",
+        "cocoa_beans",
+        "nether_wart",
+        "brown_mushroom",
+        "red_mushroom",
+        "kelp",
+        "dried_kelp",
+        "sweet_berries",
+        "glow_berries",
+        "rabbit_foot",
+        "rabbit_hide",
+        "spider_eye",
+        "fermented_spider_eye",
+        "slime_ball",
+        "magma_cream",
+        "ghast_tear",
+        "blaze_powder",
+        "blaze_rod",
+        "bone_meal",
+        "paper",
+        "gunpowder",
+        "prismarine_shard",
+        "prismarine_crystals",
+        "nautilus_shell"
+    };
     private static final Map<Integer, Integer> LAST_TWINKLE_AGE = new HashMap<>();
     private static final Map<Integer, SpinState> SPIN_STATES = new HashMap<>();
     private final ItemModelManager itemModelManager;
@@ -75,7 +111,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
             matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(state.tumbleYaw));
             matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(state.tumblePitch));
         }
-        matrices.scale(THROWN_SWORD_SCALE, THROWN_SWORD_SCALE, THROWN_SWORD_SCALE);
+        matrices.scale(state.renderScale, state.renderScale, state.renderScale);
 
         state.itemRenderState.render(matrices, queue, state.light, OverlayTexture.DEFAULT_UV, state.outlineColor);
 
@@ -94,6 +130,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         this.itemModelManager.updateForNonLivingEntity(state.itemRenderState, entity.getStack(), ItemDisplayContext.FIXED, entity);
         state.embedded = entity.isEmbedded();
         state.pointFirstFlight = entity.usesPointFirstFlight();
+        state.renderScale = getThrownRenderScale(entity.getStack());
         state.trailPoints = state.embedded ? Collections.emptyList() : entity.getTrailPoints();
 
         Vec3d velocity = entity.getVelocity();
@@ -181,6 +218,30 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         int hash = entityId * 73428767 ^ entityAge * 9122713 ^ salt * 19349663;
         hash ^= hash >>> 16;
         return ((hash & 0xFFFF) / 32767.5F) - 1.0F;
+    }
+
+    private static float getThrownRenderScale(ItemStack stack) {
+        return isSmallThrownItem(stack) ? SMALL_THROWN_ITEM_SCALE : THROWN_SWORD_SCALE;
+    }
+
+    private static boolean isSmallThrownItem(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+
+        UseAction useAction = stack.getUseAction();
+        if (useAction == UseAction.EAT || useAction == UseAction.DRINK) {
+            return true;
+        }
+
+        String itemPath = Registries.ITEM.getId(stack.getItem()).getPath();
+        for (String ingredientPath : SMALL_INGREDIENT_PATHS) {
+            if (ingredientPath.equals(itemPath)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void spawnTrailTwinkle(ThrownSwordRenderState state) {
@@ -357,6 +418,7 @@ public class ThrownSwordRenderer extends EntityRenderer<ThrownSwordEntity, Throw
         public float flightYaw;
         public float flightPitch;
         public float roll;
+        public float renderScale = THROWN_SWORD_SCALE;
         public float tumbleYaw;
         public float tumblePitch;
         public double velocitySquared;
