@@ -19,6 +19,7 @@ public class SwordThrowClient implements ClientModInitializer {
 
     private static boolean charging;
     private static int chargeTicks;
+    private static boolean allowNextSingleItemDrop;
 
     @Override
     public void onInitializeClient() {
@@ -32,6 +33,7 @@ public class SwordThrowClient implements ClientModInitializer {
             if (client.player == null || client.world == null || client.player.isSpectator()) {
                 charging = false;
                 chargeTicks = 0;
+                allowNextSingleItemDrop = false;
                 ThrowPoseState.cancel();
                 return;
             }
@@ -57,6 +59,7 @@ public class SwordThrowClient implements ClientModInitializer {
                     ClientPlayNetworking.send(new ThrowSwordPayload(chargeTicks));
                 } else {
                     ThrowPoseState.cancel();
+                    allowNormalSingleItemDrop(client);
                 }
                 charging = false;
                 chargeTicks = 0;
@@ -96,5 +99,23 @@ public class SwordThrowClient implements ClientModInitializer {
             && client.player.isAlive()
             && !client.player.isSpectator()
             && canThrow(client.player.getMainHandStack());
+    }
+
+    public static boolean consumeSingleItemDropBypass() {
+        if (!allowNextSingleItemDrop) {
+            return false;
+        }
+
+        allowNextSingleItemDrop = false;
+        return true;
+    }
+
+    private static void allowNormalSingleItemDrop(MinecraftClient client) {
+        if (client.player == null || client.currentScreen != null) {
+            return;
+        }
+
+        allowNextSingleItemDrop = true;
+        client.player.dropSelectedItem(false);
     }
 }

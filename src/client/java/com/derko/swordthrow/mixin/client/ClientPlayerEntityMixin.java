@@ -17,6 +17,10 @@ public class ClientPlayerEntityMixin {
             return;
         }
 
+        if (SwordThrowClient.consumeSingleItemDropBypass()) {
+            return;
+        }
+
         if (SwordThrowClient.shouldInterceptDropKey(MinecraftClient.getInstance())) {
             cir.setReturnValue(false);
         }

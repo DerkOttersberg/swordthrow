@@ -8,6 +8,7 @@ import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.LivingEntity;
@@ -20,6 +21,8 @@ import net.minecraft.item.Items;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.storage.ReadView;
+import net.minecraft.storage.WriteView;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.math.Direction;
@@ -39,8 +42,10 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     private static final float CLEAN_FLIGHT_DAMAGE_BONUS = 1.35F;
     private static final float BLOCK_BASE_DAMAGE = 0.35F;
     private static final float MISC_BASE_DAMAGE = 0.6F;
+    private static final String STACK_COUNT_KEY = "ThrownStackCount";
     private boolean dropped;
     private boolean hitBlock;
+    private int thrownStackCount = 1;
     private final Deque<Vec3d> trailPoints = new ArrayDeque<>();
 
     public ThrownSwordEntity(EntityType<? extends ThrownSwordEntity> entityType, World world) {
@@ -49,6 +54,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
 
     public ThrownSwordEntity(World world, LivingEntity owner, ItemStack stack) {
         super(ModEntities.THROWN_SWORD, owner, world, stack.copy());
+        this.thrownStackCount = Math.max(1, stack.getCount());
     }
 
     @Override
@@ -129,6 +135,18 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     @Override
     protected Item getDefaultItem() {
         return Items.IRON_SWORD;
+    }
+
+    @Override
+    protected void writeCustomData(WriteView writeView) {
+        super.writeCustomData(writeView);
+        writeView.putInt(STACK_COUNT_KEY, this.thrownStackCount);
+    }
+
+    @Override
+    protected void readCustomData(ReadView readView) {
+        super.readCustomData(readView);
+        this.thrownStackCount = Math.max(1, readView.getInt(STACK_COUNT_KEY, 1));
     }
 
     public List<Vec3d> getTrailPoints() {
@@ -243,9 +261,12 @@ public class ThrownSwordEntity extends ThrownItemEntity {
             return;
         }
 
-        ItemStack stack = this.getStack().copy();
+        ItemStack stack = this.getStack().copyWithCount(this.thrownStackCount);
         if (!stack.isEmpty()) {
-            this.dropStack(serverWorld, stack, 0.1F);
+            ItemEntity itemEntity = new ItemEntity(serverWorld, this.getX(), this.getY(), this.getZ(), stack);
+            itemEntity.setVelocity(this.getVelocity().multiply(0.2D));
+            itemEntity.setPickupDelay(5);
+            serverWorld.spawnEntity(itemEntity);
         }
         this.discard();
     }
