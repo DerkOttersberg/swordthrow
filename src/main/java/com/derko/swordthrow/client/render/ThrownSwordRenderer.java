@@ -1,11 +1,11 @@
 package com.derko.swordthrow.client.render;
 
-import com.derko.seamlessapi.api.visual.SeamlessVec3;
-import com.derko.seamlessapi.api.visual.SpinTumbleAnimator;
-import com.derko.seamlessapi.api.visual.ThrownItemVisualProfile;
-import com.derko.seamlessapi.api.visual.TrailMath;
 import com.derko.swordthrow.SwordThrowMod;
 import com.derko.swordthrow.client.config.SwordThrowClientConfig;
+import com.derko.swordthrow.client.render.visual.SeamlessVec3;
+import com.derko.swordthrow.client.render.visual.SpinTumbleAnimator;
+import com.derko.swordthrow.client.render.visual.ThrownItemVisualProfile;
+import com.derko.swordthrow.client.render.visual.TrailMath;
 import com.derko.swordthrow.entity.ThrownSwordEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;

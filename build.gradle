@@ -34,10 +34,6 @@ neoForge {
     }
 }
 
-dependencies {
-    implementation files("../Seamless-API/build/libs/seamlessapi-1.0.0.jar")
-}
-
 tasks.withType(ProcessResources).configureEach {
     inputs.property "version", project.version
 
