@@ -1,112 +1,130 @@
 package com.derko.swordthrow;
 
+import com.derko.swordthrow.client.SwordThrowClient;
+import com.derko.swordthrow.client.config.SwordThrowConfigScreen;
 import com.derko.swordthrow.entity.ModEntities;
 import com.derko.swordthrow.entity.ThrownSwordEntity;
 import com.derko.swordthrow.network.ThrowSwordPayload;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.item.ItemStack;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.util.Hand;
-import net.minecraft.item.ItemStack;
-import net.minecraft.util.Identifier;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SwordThrowMod implements ModInitializer {
+@Mod(SwordThrowMod.MOD_ID)
+public class SwordThrowMod {
     public static final String MOD_ID = "swordthrow";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    public static Identifier id(String path) {
-        return Identifier.of(MOD_ID, path);
+    public SwordThrowMod(IEventBus modEventBus, ModContainer container) {
+        ModEntities.register(modEventBus);
+        modEventBus.addListener(this::registerPayloads);
+
+        if (FMLEnvironment.dist.isClient()) {
+            container.registerExtensionPoint(IConfigScreenFactory.class, (modContainer, parent) -> new SwordThrowConfigScreen(parent));
+            SwordThrowClient.init(modEventBus);
+        }
+
+        LOGGER.info("Sword Throw (NeoForge) initialized");
     }
 
-    @Override
-    public void onInitialize() {
-        ModEntities.register();
-        PayloadTypeRegistry.playC2S().register(ThrowSwordPayload.ID, ThrowSwordPayload.CODEC);
-        ServerPlayNetworking.registerGlobalReceiver(ThrowSwordPayload.ID, (payload, context) ->
-            context.server().execute(() -> tryThrowItem(context.player(), payload.chargeTicks()))
+    public static ResourceLocation id(String path) {
+        return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+    }
+
+    private void registerPayloads(RegisterPayloadHandlersEvent event) {
+        PayloadRegistrar registrar = event.registrar("1");
+        registrar.playToServer(ThrowSwordPayload.TYPE, ThrowSwordPayload.STREAM_CODEC, (payload, context) ->
+            context.enqueueWork(() -> {
+                if (context.player() instanceof ServerPlayer player) {
+                    tryThrowItem(player, payload.chargeTicks());
+                }
+            })
         );
-        LOGGER.info("Sword Throw initialized");
     }
 
-    private static void tryThrowItem(ServerPlayerEntity player, int rawChargeTicks) {
+    public static void tryThrowItem(ServerPlayer player, int rawChargeTicks) {
         if (player == null || !player.isAlive() || player.isSpectator()) {
             return;
         }
 
         int chargeTicks = Math.max(0, Math.min(rawChargeTicks, 30));
-
         if (chargeTicks < 15) {
             return;
         }
 
-        ItemStack held = player.getMainHandStack();
+        ItemStack held = player.getMainHandItem();
         if (held.isEmpty()) {
             return;
         }
 
-        if (player.getItemCooldownManager().isCoolingDown(held)) {
+        if (player.getCooldowns().isOnCooldown(held.getItem())) {
             return;
         }
 
         ItemStack thrownStack = held.copy();
-        if (!player.getAbilities().creativeMode) {
-            player.setStackInHand(Hand.MAIN_HAND, ItemStack.EMPTY);
+        if (!player.getAbilities().instabuild) {
+            player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
         }
 
         float chargeProgress = chargeTicks / 30.0F;
         float throwSpeed = 1.10F + chargeProgress * 1.20F;
 
-        ThrownSwordEntity projectile = new ThrownSwordEntity(player.getEntityWorld(), player, thrownStack);
-        projectile.setVelocity(player, player.getPitch(), player.getYaw(), 0.0F, throwSpeed, 0.75F);
-        player.getEntityWorld().spawnEntity(projectile);
+        ThrownSwordEntity projectile = new ThrownSwordEntity(player.level(), player, thrownStack);
+        projectile.shootFromRotation(player, player.getXRot(), player.getYRot(), 0.0F, throwSpeed, 0.75F);
+        player.level().addFreshEntity(projectile);
         playThrowSound(player, projectile, chargeProgress);
 
         int cooldownTicks = 10 + Math.round(chargeProgress * 8.0F);
-        player.getItemCooldownManager().set(thrownStack, cooldownTicks);
+        player.getCooldowns().addCooldown(thrownStack.getItem(), cooldownTicks);
     }
 
-    private static void playThrowSound(ServerPlayerEntity player, ThrownSwordEntity projectile, float chargeProgress) {
+    private static void playThrowSound(ServerPlayer player, ThrownSwordEntity projectile, float chargeProgress) {
         float baseVolume = 0.45F + chargeProgress * 0.3F;
         float randomPitch = 0.92F + player.getRandom().nextFloat() * 0.12F;
 
-        player.getEntityWorld().playSound(
+        player.level().playSound(
             null,
             player.getX(),
             player.getY(),
             player.getZ(),
-            SoundEvents.ENTITY_ARROW_SHOOT,
-            SoundCategory.PLAYERS,
+            SoundEvents.ARROW_SHOOT,
+            SoundSource.PLAYERS,
             baseVolume,
             randomPitch
         );
 
         if (projectile.usesPointFirstFlight()) {
-            player.getEntityWorld().playSound(
+            player.level().playSound(
                 null,
                 player.getX(),
                 player.getY(),
                 player.getZ(),
-                SoundEvents.ITEM_TRIDENT_THROW,
-                SoundCategory.PLAYERS,
+                SoundEvents.TRIDENT_THROW,
+                SoundSource.PLAYERS,
                 0.8F + chargeProgress * 0.25F,
                 0.95F + player.getRandom().nextFloat() * 0.08F
             );
             return;
         }
 
-        player.getEntityWorld().playSound(
+        player.level().playSound(
             null,
             player.getX(),
             player.getY(),
             player.getZ(),
-            SoundEvents.ENTITY_PLAYER_ATTACK_SWEEP,
-            SoundCategory.PLAYERS,
+            SoundEvents.PLAYER_ATTACK_SWEEP,
+            SoundSource.PLAYERS,
             0.18F + chargeProgress * 0.16F,
             0.8F + player.getRandom().nextFloat() * 0.15F
         );

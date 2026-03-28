@@ -1,30 +1,30 @@
 package com.derko.swordthrow.entity;
 
 import com.derko.swordthrow.SwordThrowMod;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.SpawnGroup;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 public final class ModEntities {
-    public static final RegistryKey<EntityType<?>> THROWN_SWORD_KEY = RegistryKey.of(RegistryKeys.ENTITY_TYPE, SwordThrowMod.id("thrown_sword"));
+    private static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
+        DeferredRegister.create(BuiltInRegistries.ENTITY_TYPE, SwordThrowMod.MOD_ID);
 
-    public static final EntityType<ThrownSwordEntity> THROWN_SWORD = Registry.register(
-        Registries.ENTITY_TYPE,
-        THROWN_SWORD_KEY,
-        EntityType.Builder.<ThrownSwordEntity>create(ThrownSwordEntity::new, SpawnGroup.MISC)
-            .dimensions(0.5F, 0.5F)
-            .maxTrackingRange(6)
-            .trackingTickInterval(2)
-            .build(THROWN_SWORD_KEY)
-    );
+    public static final DeferredHolder<EntityType<?>, EntityType<ThrownSwordEntity>> THROWN_SWORD =
+        ENTITY_TYPES.register("thrown_sword", () ->
+            EntityType.Builder.<ThrownSwordEntity>of(ThrownSwordEntity::new, MobCategory.MISC)
+                .sized(0.5F, 0.5F)
+                .clientTrackingRange(6)
+                .updateInterval(2)
+                .build("thrown_sword")
+        );
 
     private ModEntities() {
     }
 
-    public static void register() {
-        SwordThrowMod.LOGGER.info("Registered entities for {}", SwordThrowMod.MOD_ID);
+    public static void register(IEventBus modEventBus) {
+        ENTITY_TYPES.register(modEventBus);
     }
 }

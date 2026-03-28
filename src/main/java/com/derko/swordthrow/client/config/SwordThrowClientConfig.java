@@ -7,11 +7,11 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import net.fabricmc.loader.api.FabricLoader;
+import net.neoforged.fml.loading.FMLPaths;
 
 public final class SwordThrowClientConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("swordthrow-client.json");
+    private static final Path CONFIG_PATH = FMLPaths.CONFIGDIR.get().resolve("swordthrow-client.json");
 
     private static final TrailColorOption[] TRAIL_COLOR_OPTIONS = new TrailColorOption[] {
         new TrailColorOption("Amber", 0xD4A63A),
@@ -141,3 +141,4 @@ public final class SwordThrowClientConfig {
         }
     }
 }
+

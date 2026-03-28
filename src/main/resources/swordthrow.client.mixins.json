@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "com.derko.swordthrow.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "LocalPlayerMixin",
+    "ItemInHandRendererMixin",
+    "PlayerModelMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
