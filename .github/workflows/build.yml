@@ -12,6 +12,11 @@ jobs:
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
+      - name: checkout Seamless-API
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/Seamless-API
+          path: Seamless-API
       - name: validate gradle wrapper
         uses: gradle/actions/wrapper-validation@v4
       - name: setup jdk

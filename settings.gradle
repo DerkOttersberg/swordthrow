@@ -9,4 +9,13 @@ pluginManagement {
 	}
 }
 
-includeBuild("../Seamless-API")
+def siblingApi = file("../Seamless-API")
+def localApi = file("Seamless-API")
+
+if (siblingApi.exists()) {
+	includeBuild(siblingApi)
+} else if (localApi.exists()) {
+	includeBuild(localApi)
+} else {
+	throw new GradleException("Seamless-API not found. Expected ../Seamless-API or ./Seamless-API")
+}
