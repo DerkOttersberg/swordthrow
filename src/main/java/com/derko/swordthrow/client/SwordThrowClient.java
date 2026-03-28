@@ -10,11 +10,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TridentItem;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class SwordThrowClient {
     private static final int MAX_CHARGE_TICKS = 30;
@@ -53,7 +53,7 @@ public final class SwordThrowClient {
 
         ItemStack heldStack = client.player.getMainHandItem();
         boolean keyDown = client.options.keyDrop.isDown() && client.screen == null;
-        boolean canThrowHeldItem = canThrow(heldStack) && !client.player.getCooldowns().isOnCooldown(heldStack.getItem());
+        boolean canThrowHeldItem = canThrow(heldStack) && !client.player.getCooldowns().isOnCooldown(heldStack);
 
         if (keyDown && canThrowHeldItem) {
             if (!charging) {
@@ -70,7 +70,7 @@ public final class SwordThrowClient {
         if (charging) {
             if (chargeTicks >= MAX_CHARGE_TICKS / 2) {
                 ThrowPoseState.releaseForward();
-                PacketDistributor.sendToServer(new ThrowSwordPayload(chargeTicks));
+                ClientPacketDistributor.sendToServer(new ThrowSwordPayload(chargeTicks));
             } else {
                 ThrowPoseState.cancel();
                 allowNormalSingleItemDrop(client);

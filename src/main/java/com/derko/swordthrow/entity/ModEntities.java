@@ -2,6 +2,8 @@ package com.derko.swordthrow.entity;
 
 import com.derko.swordthrow.SwordThrowMod;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.neoforged.bus.api.IEventBus;
@@ -18,7 +20,7 @@ public final class ModEntities {
                 .sized(0.5F, 0.5F)
                 .clientTrackingRange(6)
                 .updateInterval(2)
-                .build("thrown_sword")
+                .build(ResourceKey.create(Registries.ENTITY_TYPE, SwordThrowMod.id("thrown_sword")))
         );
 
     private ModEntities() {

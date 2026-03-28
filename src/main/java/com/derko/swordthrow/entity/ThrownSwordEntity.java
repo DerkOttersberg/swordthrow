@@ -4,7 +4,6 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
@@ -18,7 +17,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.entity.projectile.ThrowableItemProjectile;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrowableItemProjectile;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -29,6 +28,8 @@ import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -38,14 +39,22 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 
 public class ThrownSwordEntity extends ThrowableItemProjectile {
+    private static final EntityDataAccessor<Boolean> DATA_EMBEDDED = SynchedEntityData.defineId(ThrownSwordEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Float> DATA_EMBEDDED_ROLL = SynchedEntityData.defineId(ThrownSwordEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_EMBEDDED_YAW = SynchedEntityData.defineId(ThrownSwordEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_EMBEDDED_PITCH = SynchedEntityData.defineId(ThrownSwordEntity.class, EntityDataSerializers.FLOAT);
     private static final double BOUNCE_DAMPING = 0.68D;
     private static final double WALL_HORIZONTAL_DAMPING = 0.42D;
     private static final double WALL_VERTICAL_DAMPING = 0.92D;
     private static final double MIN_BOUNCE_SPEED_SQUARED = 0.18D * 0.18D;
     private static final double BOUNCE_SURFACE_OFFSET = 0.08D;
-    private static final double EMBED_DEPTH = 0.012D;
+    private static final double EMBED_DEPTH = 0.12D;
+    private static final double EMBED_SURFACE_INSET = 0.02D;
     private static final double EMBED_MIN_SPEED_SQUARED = 0.42D * 0.42D;
     private static final double EMBED_HEAD_ON_THRESHOLD = 0.24D;
     private static final float EMBEDDED_ROLL_THRESHOLD = 0.38F;
@@ -62,15 +71,15 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
     private static final String STACK_COUNT_KEY = "ThrownStackCount";
     private static final String EMBEDDED_KEY = "Embedded";
     private static final String EMBEDDED_ROLL_KEY = "EmbeddedRoll";
+    private static final String EMBEDDED_YAW_KEY = "EmbeddedYaw";
+    private static final String EMBEDDED_PITCH_KEY = "EmbeddedPitch";
     private static final String EMBEDDED_X_KEY = "EmbeddedX";
     private static final String EMBEDDED_Y_KEY = "EmbeddedY";
     private static final String EMBEDDED_Z_KEY = "EmbeddedZ";
 
     private boolean dropped;
     private boolean hitBlock;
-    private boolean embedded;
     private int thrownStackCount = 1;
-    private float embeddedRoll;
     private Vec3 embeddedPosition = Vec3.ZERO;
     private final Deque<Vec3> trailPoints = new ArrayDeque<>();
 
@@ -79,34 +88,53 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
     }
 
     public ThrownSwordEntity(Level level, LivingEntity owner, ItemStack stack) {
-        super(ModEntities.THROWN_SWORD.get(), owner, level);
+        super(ModEntities.THROWN_SWORD.get(), owner, level, stack.copyWithCount(1));
         this.thrownStackCount = Math.max(1, stack.getCount());
-        this.setItem(stack.copyWithCount(1));
+    }
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(DATA_EMBEDDED, false);
+        builder.define(DATA_EMBEDDED_ROLL, 0.0F);
+        builder.define(DATA_EMBEDDED_YAW, 0.0F);
+        builder.define(DATA_EMBEDDED_PITCH, 0.0F);
     }
 
     @Override
     public void tick() {
-        if (this.embedded) {
+        if (this.isEmbedded()) {
             this.tickCount++;
             this.setNoGravity(true);
             this.setDeltaMovement(Vec3.ZERO);
-            this.setPos(this.embeddedPosition);
+            if (!this.level().isClientSide()) {
+                this.setPos(this.embeddedPosition);
+            } else {
+                this.embeddedPosition = this.position();
+            }
 
-            if (this.level().isClientSide) {
+            float embeddedYaw = this.getEmbeddedYaw();
+            float embeddedPitch = this.getEmbeddedPitch();
+            this.setYRot(embeddedYaw);
+            this.setXRot(embeddedPitch);
+            this.yRotO = embeddedYaw;
+            this.xRotO = embeddedPitch;
+
+            if (this.level().isClientSide()) {
                 this.trailPoints.clear();
-                this.trailPoints.addLast(this.embeddedPosition);
+                this.trailPoints.addLast(this.position());
             }
             return;
         }
 
         super.tick();
 
-        if (this.level().isClientSide) {
+        if (this.level().isClientSide()) {
             recordTrailPoint();
             return;
         }
 
-        if (this.level().isClientSide) {
+        if (this.level().isClientSide()) {
             return;
         }
 
@@ -124,7 +152,7 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
 
     @Override
     protected void onHitEntity(EntityHitResult hitResult) {
-        if (this.embedded) {
+        if (this.isEmbedded()) {
             return;
         }
 
@@ -136,27 +164,25 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
 
         DamageSource source = this.damageSources().thrown(this, this.getOwner());
         float damage = this.getThrownDamage(serverLevel, this.getItem(), hitResult.getEntity(), source);
-        boolean dealtDamage = hitResult.getEntity().hurt(source, damage);
-        if (dealtDamage) {
-            this.applyThrownHitEffects(serverLevel, this.getItem(), hitResult, source);
-        }
+        hitResult.getEntity().hurt(source, damage);
+        this.applyThrownHitEffects(serverLevel, this.getItem(), hitResult, source);
         this.dropAsItemAndDiscard();
     }
 
     @Override
     protected void onHitBlock(BlockHitResult hitResult) {
-        if (this.embedded) {
+        if (this.isEmbedded()) {
             return;
         }
 
         super.onHitBlock(hitResult);
 
-        if (this.level().isClientSide) {
+        if (this.level().isClientSide()) {
             return;
         }
 
         Vec3 velocity = this.getDeltaMovement();
-        Vec3 normal = Vec3.atLowerCornerOf(hitResult.getDirection().getNormal());
+        Vec3 normal = hitResult.getDirection().getUnitVec3();
         boolean firstBlockHit = !this.hitBlock;
         this.hitBlock = true;
 
@@ -202,11 +228,19 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
     }
 
     public boolean isEmbedded() {
-        return this.embedded;
+        return this.entityData.get(DATA_EMBEDDED);
     }
 
     public float getEmbeddedRoll() {
-        return this.embeddedRoll;
+        return this.entityData.get(DATA_EMBEDDED_ROLL);
+    }
+
+    public float getEmbeddedYaw() {
+        return this.entityData.get(DATA_EMBEDDED_YAW);
+    }
+
+    public float getEmbeddedPitch() {
+        return this.entityData.get(DATA_EMBEDDED_PITCH);
     }
 
     public float getSpinPhaseOffsetDegrees() {
@@ -214,23 +248,41 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
     }
 
     @Override
-    public void addAdditionalSaveData(CompoundTag tag) {
-        super.addAdditionalSaveData(tag);
-        tag.putInt(STACK_COUNT_KEY, this.thrownStackCount);
-        tag.putBoolean(EMBEDDED_KEY, this.embedded);
-        tag.putFloat(EMBEDDED_ROLL_KEY, this.embeddedRoll);
-        tag.putDouble(EMBEDDED_X_KEY, this.embeddedPosition.x);
-        tag.putDouble(EMBEDDED_Y_KEY, this.embeddedPosition.y);
-        tag.putDouble(EMBEDDED_Z_KEY, this.embeddedPosition.z);
+    public void addAdditionalSaveData(ValueOutput output) {
+        super.addAdditionalSaveData(output);
+        output.putInt(STACK_COUNT_KEY, this.thrownStackCount);
+        output.putBoolean(EMBEDDED_KEY, this.isEmbedded());
+        output.putFloat(EMBEDDED_ROLL_KEY, this.getEmbeddedRoll());
+        output.putFloat(EMBEDDED_YAW_KEY, this.getEmbeddedYaw());
+        output.putFloat(EMBEDDED_PITCH_KEY, this.getEmbeddedPitch());
+        output.putDouble(EMBEDDED_X_KEY, this.embeddedPosition.x);
+        output.putDouble(EMBEDDED_Y_KEY, this.embeddedPosition.y);
+        output.putDouble(EMBEDDED_Z_KEY, this.embeddedPosition.z);
     }
 
     @Override
-    public void readAdditionalSaveData(CompoundTag tag) {
-        super.readAdditionalSaveData(tag);
-        this.thrownStackCount = Math.max(1, tag.getInt(STACK_COUNT_KEY));
-        this.embedded = tag.getBoolean(EMBEDDED_KEY);
-        this.embeddedRoll = tag.getFloat(EMBEDDED_ROLL_KEY);
-        this.embeddedPosition = new Vec3(tag.getDouble(EMBEDDED_X_KEY), tag.getDouble(EMBEDDED_Y_KEY), tag.getDouble(EMBEDDED_Z_KEY));
+    public void readAdditionalSaveData(ValueInput input) {
+        super.readAdditionalSaveData(input);
+        this.thrownStackCount = Math.max(1, input.getIntOr(STACK_COUNT_KEY, 1));
+        this.entityData.set(DATA_EMBEDDED, input.getBooleanOr(EMBEDDED_KEY, false));
+        this.entityData.set(DATA_EMBEDDED_ROLL, input.getFloatOr(EMBEDDED_ROLL_KEY, 0.0F));
+        this.entityData.set(DATA_EMBEDDED_YAW, input.getFloatOr(EMBEDDED_YAW_KEY, this.getYRot()));
+        this.entityData.set(DATA_EMBEDDED_PITCH, input.getFloatOr(EMBEDDED_PITCH_KEY, this.getXRot()));
+        this.embeddedPosition = new Vec3(
+            input.getDoubleOr(EMBEDDED_X_KEY, 0.0D),
+            input.getDoubleOr(EMBEDDED_Y_KEY, 0.0D),
+            input.getDoubleOr(EMBEDDED_Z_KEY, 0.0D)
+        );
+
+        if (this.isEmbedded()) {
+            float embeddedYaw = this.getEmbeddedYaw();
+            float embeddedPitch = this.getEmbeddedPitch();
+            this.setPos(this.embeddedPosition);
+            this.setYRot(embeddedYaw);
+            this.setXRot(embeddedPitch);
+            this.yRotO = embeddedYaw;
+            this.xRotO = embeddedPitch;
+        }
     }
 
     @Override
@@ -241,7 +293,7 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
             return;
         }
 
-        if (!this.embedded) {
+        if (!this.isEmbedded()) {
             return;
         }
 
@@ -299,18 +351,29 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
     }
 
     private void embedInBlock(BlockHitResult hitResult, Vec3 velocity, Vec3 normal) {
-        Vec3 direction = velocity.lengthSqr() > 1.0E-5D ? velocity.normalize() : normal;
+        Vec3 direction = velocity.lengthSqr() > 1.0E-5D ? velocity.normalize() : normal.scale(-1.0D);
         double horizontalSpeed = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
 
-        this.embedded = true;
-        this.embeddedPosition = hitResult.getLocation().subtract(normal.scale(EMBED_DEPTH));
-        this.embeddedRoll = Math.cos(Math.toRadians(this.getImpactRollDegrees())) >= 0.0D ? 0.0F : 180.0F;
+        this.embeddedPosition = hitResult.getLocation()
+            .add(direction.scale(EMBED_DEPTH))
+            .subtract(normal.scale(EMBED_SURFACE_INSET));
+        float embeddedRoll = this.usesPointFirstFlight()
+            ? 0.0F
+            : (Math.cos(Math.toRadians(this.getImpactRollDegrees())) >= 0.0D ? 0.0F : 180.0F);
+        float embeddedYaw = (float)Math.toDegrees(Math.atan2(direction.x, direction.z));
+        float embeddedPitch = (float)Math.toDegrees(Math.atan2(direction.y, horizontalSpeed));
+        this.entityData.set(DATA_EMBEDDED, true);
+        this.entityData.set(DATA_EMBEDDED_ROLL, embeddedRoll);
+        this.entityData.set(DATA_EMBEDDED_YAW, embeddedYaw);
+        this.entityData.set(DATA_EMBEDDED_PITCH, embeddedPitch);
 
         this.setNoGravity(true);
         this.setDeltaMovement(Vec3.ZERO);
         this.setPos(this.embeddedPosition);
-        this.setYRot((float)Math.toDegrees(Math.atan2(direction.x, direction.z)));
-        this.setXRot((float)Math.toDegrees(Math.atan2(direction.y, horizontalSpeed)));
+        this.setYRot(embeddedYaw);
+        this.setXRot(embeddedPitch);
+        this.yRotO = embeddedYaw;
+        this.xRotO = embeddedPitch;
         this.trailPoints.clear();
         this.trailPoints.addLast(this.embeddedPosition);
 
@@ -453,10 +516,29 @@ public class ThrownSwordEntity extends ThrowableItemProjectile {
             0.72F + serverLevel.random.nextFloat() * 0.1F
         );
 
-        SoundEvent secondarySound = this.usesPointFirstFlight() ? SoundEvents.TRIDENT_HIT_GROUND : SoundEvents.SHIELD_BLOCK;
-        float volume = this.usesPointFirstFlight() ? 0.65F : 0.3F;
-        float pitch = this.usesPointFirstFlight() ? 0.9F + serverLevel.random.nextFloat() * 0.08F : 0.7F + serverLevel.random.nextFloat() * 0.1F;
-        serverLevel.playSound(null, hitResult.getLocation().x, hitResult.getLocation().y, hitResult.getLocation().z, secondarySound, SoundSource.PLAYERS, volume, pitch);
+        if (this.usesPointFirstFlight()) {
+            serverLevel.playSound(
+                null,
+                hitResult.getLocation().x,
+                hitResult.getLocation().y,
+                hitResult.getLocation().z,
+                SoundEvents.TRIDENT_HIT_GROUND,
+                SoundSource.PLAYERS,
+                0.65F,
+                0.9F + serverLevel.random.nextFloat() * 0.08F
+            );
+        } else {
+            serverLevel.playSound(
+                null,
+                hitResult.getLocation().x,
+                hitResult.getLocation().y,
+                hitResult.getLocation().z,
+                SoundEvents.SHIELD_BLOCK,
+                SoundSource.PLAYERS,
+                0.3F,
+                0.7F + serverLevel.random.nextFloat() * 0.1F
+            );
+        }
     }
 
     private static void accumulateAttackDamageModifier(

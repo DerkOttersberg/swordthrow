@@ -2,12 +2,12 @@ package com.derko.swordthrow.mixin.client;
 
 import com.derko.swordthrow.client.ThrowPoseState;
 import com.derko.swordthrow.client.config.SwordThrowClientConfig;
-import net.minecraft.client.model.HumanoidModel;
-import net.minecraft.client.model.PlayerModel;
-import net.minecraft.client.model.geom.ModelPart;
 import java.lang.reflect.Field;
+import net.minecraft.client.model.HumanoidModel;
+import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.model.player.PlayerModel;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.world.entity.HumanoidArm;
-import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -20,39 +20,48 @@ public abstract class PlayerModelMixin {
     private static Field swordthrow$rightSleeveField;
     private static Field swordthrow$leftSleeveField;
 
-    @Inject(method = "setupAnim(Lnet/minecraft/world/entity/LivingEntity;FFFFF)V", at = @At("TAIL"))
+    @Inject(method = "setupAnim(Lnet/minecraft/client/renderer/entity/state/AvatarRenderState;)V", at = @At("TAIL"))
     private void swordthrow$applyThirdPersonChargePose(
-        LivingEntity entity,
-        float limbSwing,
-        float limbSwingAmount,
-        float ageInTicks,
-        float netHeadYaw,
-        float headPitch,
+        AvatarRenderState state,
         CallbackInfo ci
     ) {
         if (!SwordThrowClientConfig.get().thirdPersonAnimationsEnabled()) {
             return;
         }
 
-        HumanoidArm mainArm = entity.getMainArm();
+        HumanoidArm mainArm = state.mainArm;
         if (mainArm == null) {
             return;
         }
 
         HumanoidArm offArm = mainArm.getOpposite();
         ThrowPoseState.applyThirdPersonMainHandPose(
-            ageInTicks,
+            state.ageInTicks,
             mainArm,
             swordthrow$getArm(mainArm)
         );
         ThrowPoseState.applyThirdPersonOffHandPose(
-            ageInTicks,
+            state.ageInTicks,
             offArm,
             swordthrow$getArm(offArm)
         );
 
-        swordthrow$getSleeve(HumanoidArm.RIGHT).copyFrom(swordthrow$getArm(HumanoidArm.RIGHT));
-        swordthrow$getSleeve(HumanoidArm.LEFT).copyFrom(swordthrow$getArm(HumanoidArm.LEFT));
+        swordthrow$copyPartTransform(swordthrow$getSleeve(HumanoidArm.RIGHT), swordthrow$getArm(HumanoidArm.RIGHT));
+        swordthrow$copyPartTransform(swordthrow$getSleeve(HumanoidArm.LEFT), swordthrow$getArm(HumanoidArm.LEFT));
+    }
+
+    private static void swordthrow$copyPartTransform(ModelPart target, ModelPart source) {
+        target.x = source.x;
+        target.y = source.y;
+        target.z = source.z;
+        target.xRot = source.xRot;
+        target.yRot = source.yRot;
+        target.zRot = source.zRot;
+        target.xScale = source.xScale;
+        target.yScale = source.yScale;
+        target.zScale = source.zScale;
+        target.visible = source.visible;
+        target.skipDraw = source.skipDraw;
     }
 
     private ModelPart swordthrow$getArm(HumanoidArm side) {

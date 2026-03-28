@@ -5,7 +5,7 @@ import com.derko.swordthrow.client.config.SwordThrowConfigScreen;
 import com.derko.swordthrow.entity.ModEntities;
 import com.derko.swordthrow.entity.ThrownSwordEntity;
 import com.derko.swordthrow.network.ThrowSwordPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -30,7 +30,7 @@ public class SwordThrowMod {
         ModEntities.register(modEventBus);
         modEventBus.addListener(this::registerPayloads);
 
-        if (FMLEnvironment.dist.isClient()) {
+        if (FMLEnvironment.getDist().isClient()) {
             container.registerExtensionPoint(IConfigScreenFactory.class, (modContainer, parent) -> new SwordThrowConfigScreen(parent));
             SwordThrowClient.init(modEventBus);
         }
@@ -38,8 +38,8 @@ public class SwordThrowMod {
         LOGGER.info("Sword Throw (NeoForge) initialized");
     }
 
-    public static ResourceLocation id(String path) {
-        return ResourceLocation.fromNamespaceAndPath(MOD_ID, path);
+    public static Identifier id(String path) {
+        return Identifier.fromNamespaceAndPath(MOD_ID, path);
     }
 
     private void registerPayloads(RegisterPayloadHandlersEvent event) {
@@ -68,7 +68,7 @@ public class SwordThrowMod {
             return;
         }
 
-        if (player.getCooldowns().isOnCooldown(held.getItem())) {
+        if (player.getCooldowns().isOnCooldown(held)) {
             return;
         }
 
@@ -86,7 +86,7 @@ public class SwordThrowMod {
         playThrowSound(player, projectile, chargeProgress);
 
         int cooldownTicks = 10 + Math.round(chargeProgress * 8.0F);
-        player.getCooldowns().addCooldown(thrownStack.getItem(), cooldownTicks);
+        player.getCooldowns().addCooldown(thrownStack, cooldownTicks);
     }
 
     private static void playThrowSound(ServerPlayer player, ThrownSwordEntity projectile, float chargeProgress) {
