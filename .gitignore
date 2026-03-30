@@ -1,40 +1,11 @@
-# gradle
-
 .gradle/
 build/
 out/
-classes/
-
-# eclipse
-
-*.launch
-
-# idea
-
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
 .idea/
 *.iml
 *.ipr
 *.iws
-
-# vscode
-
-.settings/
-.vscode/
-bin/
-.classpath
-.project
-
-# macos
-
-*.DS_Store
-
-# runtime
-
 run/
-
-# java
-
-hs_err_*.log
-replay_*.log
-*.hprof
-*.jfr

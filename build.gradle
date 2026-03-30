@@ -1,6 +1,6 @@
 plugins {
     id 'java-library'
-    id 'net.neoforged.moddev' version '2.0.141'
+    id 'net.neoforged.moddev' version '2.0.78'
 }
 
 version = project.mod_version
@@ -32,6 +32,10 @@ neoForge {
             sourceSet sourceSets.main
         }
     }
+}
+
+dependencies {
+    implementation files("../Seamless-API/build/libs/seamlessapi-1.0.0.jar")
 }
 
 tasks.withType(ProcessResources).configureEach {
