@@ -11,7 +11,6 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Hand;
-import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,7 +49,7 @@ public class SwordThrowMod implements ModInitializer {
             return;
         }
 
-        if (player.getItemCooldownManager().isCoolingDown(held)) {
+        if (player.getItemCooldownManager().isCoolingDown(held.getItem())) {
             return;
         }
 
@@ -68,7 +67,7 @@ public class SwordThrowMod implements ModInitializer {
         playThrowSound(player, projectile, chargeProgress);
 
         int cooldownTicks = 10 + Math.round(chargeProgress * 8.0F);
-        player.getItemCooldownManager().set(thrownStack, cooldownTicks);
+        player.getItemCooldownManager().set(thrownStack.getItem(), cooldownTicks);
     }
 
     private static void playThrowSound(ServerPlayerEntity player, ThrownSwordEntity projectile, float chargeProgress) {

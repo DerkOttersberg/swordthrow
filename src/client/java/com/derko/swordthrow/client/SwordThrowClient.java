@@ -44,7 +44,7 @@ public class SwordThrowClient implements ClientModInitializer {
 
             ItemStack heldStack = client.player.getMainHandStack();
             boolean keyDown = client.options.dropKey.isPressed() && client.currentScreen == null;
-            boolean canThrowHeldItem = canThrow(heldStack) && !client.player.getItemCooldownManager().isCoolingDown(heldStack);
+            boolean canThrowHeldItem = canThrow(heldStack) && !client.player.getItemCooldownManager().isCoolingDown(heldStack.getItem());
 
             if (keyDown && canThrowHeldItem) {
                 if (!charging) {

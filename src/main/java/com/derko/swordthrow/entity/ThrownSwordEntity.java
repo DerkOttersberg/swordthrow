@@ -4,22 +4,24 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import net.minecraft.block.BlockState;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.attribute.EntityAttributeModifier;
 import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.thrown.ThrownItemEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.item.TridentItem;
+import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.ItemTags;
@@ -27,9 +29,6 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.storage.ReadView;
-import net.minecraft.storage.WriteView;
-import net.minecraft.block.BlockState;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.EntityHitResult;
 import net.minecraft.util.math.Direction;
@@ -37,14 +36,15 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 public class ThrownSwordEntity extends ThrownItemEntity {
-    private static final double BOUNCE_DAMPING = 0.68D;
-    private static final double WALL_HORIZONTAL_DAMPING = 0.42D;
-    private static final double WALL_VERTICAL_DAMPING = 0.92D;
+    private static final int BOUNCE_GRACE_TICKS = 2;
+    private static final double BOUNCE_DAMPING = 0.58D;
+    private static final double WALL_HORIZONTAL_DAMPING = 0.72D;
+    private static final double WALL_VERTICAL_DAMPING = 0.86D;
     private static final double MIN_BOUNCE_SPEED_SQUARED = 0.18D * 0.18D;
     private static final double BOUNCE_SURFACE_OFFSET = 0.08D;
     private static final double EMBED_DEPTH = 0.012D;
     private static final double EMBED_MIN_SPEED_SQUARED = 0.42D * 0.42D;
-    private static final double EMBED_HEAD_ON_THRESHOLD = 0.24D;
+    private static final double EMBED_HEAD_ON_THRESHOLD = 0.32D;
     private static final float EMBEDDED_ROLL_THRESHOLD = 0.38F;
     private static final int MAX_TRAIL_POINTS = 20;
     private static final float BASE_HAND_DAMAGE = 1.0F;
@@ -57,11 +57,17 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     private static final float MISC_BASE_DAMAGE = 0.6F;
     private static final float FLIGHT_SPIN_SPEED = 34.0F;
     private static final String STACK_COUNT_KEY = "ThrownStackCount";
+    private static final String EMBED_YAW_KEY = "EmbeddedYaw";
+    private static final String EMBED_PITCH_KEY = "EmbeddedPitch";
+
     private boolean dropped;
     private boolean hitBlock;
     private boolean embedded;
+    private int bounceGraceTicks;
     private int thrownStackCount = 1;
     private float embeddedRoll;
+    private float embeddedYaw;
+    private float embeddedPitch;
     private Vec3d embeddedPosition = Vec3d.ZERO;
     private final Deque<Vec3d> trailPoints = new ArrayDeque<>();
 
@@ -70,17 +76,26 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     }
 
     public ThrownSwordEntity(World world, LivingEntity owner, ItemStack stack) {
-        super(ModEntities.THROWN_SWORD, owner, world, stack.copy());
+        super(ModEntities.THROWN_SWORD, owner, world);
+        this.setItem(stack.copy());
         this.thrownStackCount = Math.max(1, stack.getCount());
     }
 
     @Override
     public void tick() {
+        if (this.bounceGraceTicks > 0) {
+            this.bounceGraceTicks--;
+        }
+
         if (this.embedded) {
             this.age++;
             this.setNoGravity(true);
             this.setVelocity(Vec3d.ZERO);
             this.setPosition(this.embeddedPosition);
+            this.setYaw(this.embeddedYaw);
+            this.setPitch(this.embeddedPitch);
+            this.prevYaw = this.embeddedYaw;
+            this.prevPitch = this.embeddedPitch;
 
             if (this.getEntityWorld().isClient()) {
                 this.trailPoints.clear();
@@ -96,7 +111,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
             return;
         }
 
-        this.setVelocity(this.getVelocity().multiply(0.985D, 0.97D, 0.985D));
+        this.setVelocity(this.getVelocity().multiply(0.992D, 0.985D, 0.992D));
 
         if (this.age > 120) {
             this.dropAsItemAndDiscard();
@@ -105,7 +120,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
 
     @Override
     protected double getGravity() {
-        return 0.06D;
+        return 0.045D;
     }
 
     @Override
@@ -123,7 +138,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         ItemStack thrownStack = this.getStack();
         DamageSource source = this.getDamageSources().thrown(this, this.getOwner());
         float damage = this.getThrownDamage(serverWorld, thrownStack, hitResult.getEntity(), source);
-        boolean dealtDamage = hitResult.getEntity().damage(serverWorld, source, damage);
+        boolean dealtDamage = hitResult.getEntity().damage(source, damage);
 
         if (dealtDamage) {
             this.applyThrownHitEffects(serverWorld, thrownStack, hitResult);
@@ -134,7 +149,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
 
     @Override
     protected void onBlockHit(BlockHitResult hitResult) {
-        if (this.embedded) {
+        if (this.embedded || this.bounceGraceTicks > 0) {
             return;
         }
 
@@ -156,7 +171,9 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         }
 
         double normalComponent = velocity.dotProduct(normal);
-        Vec3d reflectedVelocity = velocity.subtract(normal.multiply(2.0D * normalComponent)).multiply(BOUNCE_DAMPING);
+        Vec3d normalVelocity = normal.multiply(normalComponent);
+        Vec3d tangentialVelocity = velocity.subtract(normalVelocity).multiply(BOUNCE_DAMPING);
+        Vec3d reflectedVelocity = tangentialVelocity.subtract(normalVelocity.multiply(0.65D));
 
         if (side.getAxis().isHorizontal()) {
             reflectedVelocity = new Vec3d(
@@ -171,10 +188,13 @@ public class ThrownSwordEntity extends ThrownItemEntity {
             return;
         }
 
-        Vec3d bouncePosition = hitResult.getPos().add(normal.multiply(BOUNCE_SURFACE_OFFSET));
+        Vec3d bouncePosition = hitResult.getPos()
+            .add(normal.multiply(BOUNCE_SURFACE_OFFSET + 0.04D))
+            .add(reflectedVelocity.normalize().multiply(0.02D));
         this.setPosition(bouncePosition);
         this.setVelocity(reflectedVelocity);
-        this.playBounceSound((ServerWorld)this.getEntityWorld(), hitResult, reflectedVelocity.lengthSquared());
+        this.bounceGraceTicks = BOUNCE_GRACE_TICKS;
+        this.playBounceSound((ServerWorld) this.getEntityWorld(), hitResult, reflectedVelocity.lengthSquared());
     }
 
     @Override
@@ -194,15 +214,19 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     }
 
     @Override
-    protected void writeCustomData(WriteView writeView) {
-        super.writeCustomData(writeView);
-        writeView.putInt(STACK_COUNT_KEY, this.thrownStackCount);
+    public void writeCustomDataToNbt(NbtCompound nbt) {
+        super.writeCustomDataToNbt(nbt);
+        nbt.putInt(STACK_COUNT_KEY, this.thrownStackCount);
+        nbt.putFloat(EMBED_YAW_KEY, this.embeddedYaw);
+        nbt.putFloat(EMBED_PITCH_KEY, this.embeddedPitch);
     }
 
     @Override
-    protected void readCustomData(ReadView readView) {
-        super.readCustomData(readView);
-        this.thrownStackCount = Math.max(1, readView.getInt(STACK_COUNT_KEY, 1));
+    public void readCustomDataFromNbt(NbtCompound nbt) {
+        super.readCustomDataFromNbt(nbt);
+        this.thrownStackCount = Math.max(1, nbt.contains(STACK_COUNT_KEY) ? nbt.getInt(STACK_COUNT_KEY) : 1);
+        this.embeddedYaw = nbt.contains(EMBED_YAW_KEY) ? nbt.getFloat(EMBED_YAW_KEY) : this.getYaw();
+        this.embeddedPitch = nbt.contains(EMBED_PITCH_KEY) ? nbt.getFloat(EMBED_PITCH_KEY) : this.getPitch();
     }
 
     public List<Vec3d> getTrailPoints() {
@@ -271,22 +295,37 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         }
 
         float impactRoll = this.getImpactRollDegrees();
-        return Math.abs((float)Math.cos(Math.toRadians(impactRoll))) >= EMBEDDED_ROLL_THRESHOLD;
+        return Math.abs((float) Math.cos(Math.toRadians(impactRoll))) >= EMBEDDED_ROLL_THRESHOLD;
     }
 
     private void embedInBlock(BlockHitResult hitResult, Vec3d velocity, Vec3d normal) {
-        Vec3d direction = velocity.lengthSquared() > 1.0E-5D ? velocity.normalize() : normal;
-        double horizontalSpeed = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
+        Vec3d direction = velocity.lengthSquared() > 1.0E-5D ? velocity.normalize() : normal.multiply(-1.0D);
+        Vec3d surfaceFacing = normal.multiply(-1.0D);
+        double alignment = Math.max(0.0D, -direction.dotProduct(normal));
+        Vec3d embedDirection = direction.multiply(0.55D + alignment * 0.45D)
+            .add(surfaceFacing.multiply(1.0D - alignment * 0.45D));
+        if (embedDirection.lengthSquared() < 1.0E-5D) {
+            embedDirection = surfaceFacing;
+        } else {
+            embedDirection = embedDirection.normalize();
+        }
+        double horizontalSpeed = Math.sqrt(embedDirection.x * embedDirection.x + embedDirection.z * embedDirection.z);
 
         this.embedded = true;
+        this.bounceGraceTicks = 0;
         this.embeddedPosition = hitResult.getPos().subtract(normal.multiply(EMBED_DEPTH));
-        this.embeddedRoll = Math.cos(Math.toRadians(this.getImpactRollDegrees())) >= 0.0D ? 0.0F : 180.0F;
+        this.embeddedRoll = normalizeRoll(this.getImpactRollDegrees());
+
+        this.embeddedYaw = (float) Math.toDegrees(Math.atan2(embedDirection.x, embedDirection.z));
+        this.embeddedPitch = (float) Math.toDegrees(Math.atan2(embedDirection.y, horizontalSpeed));
 
         this.setNoGravity(true);
         this.setVelocity(Vec3d.ZERO);
         this.setPosition(this.embeddedPosition);
-        this.setYaw((float)Math.toDegrees(Math.atan2(direction.x, direction.z)));
-        this.setPitch((float)Math.toDegrees(Math.atan2(direction.y, horizontalSpeed)));
+        this.setYaw(this.embeddedYaw);
+        this.setPitch(this.embeddedPitch);
+        this.prevYaw = this.embeddedYaw;
+        this.prevPitch = this.embeddedPitch;
         this.trailPoints.clear();
         this.trailPoints.addLast(this.embeddedPosition);
 
@@ -299,9 +338,17 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         return this.age * FLIGHT_SPIN_SPEED + this.getSpinPhaseOffsetDegrees();
     }
 
+    private static float normalizeRoll(float degrees) {
+        float wrapped = degrees % 360.0F;
+        if (wrapped < 0.0F) {
+            wrapped += 360.0F;
+        }
+        return wrapped;
+    }
+
     private float getThrownDamage(ServerWorld serverWorld, ItemStack thrownStack, net.minecraft.entity.Entity target, DamageSource source) {
         float itemDamage = getThrownBaseDamage(thrownStack);
-        float speed = (float)this.getVelocity().length();
+        float speed = (float) this.getVelocity().length();
         float velocityMultiplier = VELOCITY_DAMAGE_BASE + speed * VELOCITY_DAMAGE_FACTOR;
         float damage = itemDamage * velocityMultiplier;
 
@@ -353,16 +400,16 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         final float[] multipliedTotal = new float[] {1.0F};
 
         thrownStack.applyAttributeModifiers(EquipmentSlot.MAINHAND, (attribute, modifier) -> {
-            if (!attribute.equals(EntityAttributes.ATTACK_DAMAGE)) {
+            if (!attribute.equals(EntityAttributes.GENERIC_ATTACK_DAMAGE)) {
                 return;
             }
 
             if (modifier.operation() == EntityAttributeModifier.Operation.ADD_VALUE) {
-                additive[0] += (float)modifier.value();
+                additive[0] += (float) modifier.value();
             } else if (modifier.operation() == EntityAttributeModifier.Operation.ADD_MULTIPLIED_BASE) {
-                multipliedBase[0] += (float)modifier.value();
+                multipliedBase[0] += (float) modifier.value();
             } else if (modifier.operation() == EntityAttributeModifier.Operation.ADD_MULTIPLIED_TOTAL) {
-                multipliedTotal[0] *= 1.0F + (float)modifier.value();
+                multipliedTotal[0] *= 1.0F + (float) modifier.value();
             }
         });
 
@@ -377,9 +424,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         attacker.onAttacking(target);
 
         int fireAspectLevel = EnchantmentHelper.getLevel(
-            serverWorld.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getEntry(
-                serverWorld.getRegistryManager().getOrThrow(RegistryKeys.ENCHANTMENT).getValueOrThrow(Enchantments.FIRE_ASPECT)
-            ),
+            serverWorld.getRegistryManager().get(RegistryKeys.ENCHANTMENT).entryOf(Enchantments.FIRE_ASPECT),
             thrownStack
         );
         if (fireAspectLevel > 0) {
@@ -387,8 +432,10 @@ public class ThrownSwordEntity extends ThrownItemEntity {
         }
 
         EnchantmentHelper.onTargetDamaged(serverWorld, target, this.getDamageSources().thrown(this, attacker), thrownStack);
-        thrownStack.postHit(target, attacker);
-        thrownStack.postDamageEntity(target, attacker);
+        if (attacker instanceof PlayerEntity playerAttacker) {
+            thrownStack.postHit(target, playerAttacker);
+            thrownStack.postDamageEntity(target, playerAttacker);
+        }
     }
 
     private void tryPickupEmbeddedWeapon(ServerWorld serverWorld, PlayerEntity player) {
@@ -410,7 +457,7 @@ public class ThrownSwordEntity extends ThrownItemEntity {
     private void playBounceSound(ServerWorld serverWorld, BlockHitResult hitResult, double speedSquared) {
         BlockState blockState = serverWorld.getBlockState(hitResult.getBlockPos());
         BlockSoundGroup soundGroup = blockState.getSoundGroup();
-        float speedFactor = (float)Math.min(1.0D, Math.sqrt(speedSquared));
+        float speedFactor = (float) Math.min(1.0D, Math.sqrt(speedSquared));
 
         serverWorld.playSound(
             null,

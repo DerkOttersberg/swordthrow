@@ -9,13 +9,16 @@ pluginManagement {
 	}
 }
 
-def siblingApi = file("../Seamless-API")
-def localApi = file("Seamless-API")
+def apiCandidates = [
+	file("../Seamless-API 1.21.1 fabric"),
+	file("../Seamless-API"),
+	file("Seamless-API 1.21.1 fabric"),
+	file("Seamless-API")
+]
 
-if (siblingApi.exists()) {
-	includeBuild(siblingApi)
-} else if (localApi.exists()) {
-	includeBuild(localApi)
+def apiBuild = apiCandidates.find { it.exists() }
+if (apiBuild != null) {
+	includeBuild(apiBuild)
 } else {
-	throw new GradleException("Seamless-API not found. Expected ../Seamless-API or ./Seamless-API")
+	throw new GradleException("Seamless-API not found. Expected one of: ../Seamless-API 1.21.1 fabric, ../Seamless-API, ./Seamless-API 1.21.1 fabric, ./Seamless-API")
 }

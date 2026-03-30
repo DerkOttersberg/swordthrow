@@ -3,8 +3,10 @@
 	"package": "com.derko.swordthrow.mixin.client",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"BipedEntityModelAccessor",
 		"ClientPlayerEntityMixin",
 		"HeldItemRendererMixin",
+		"PlayerEntityModelAccessor",
 		"PlayerEntityModelMixin"
 	],
 	"injectors": {

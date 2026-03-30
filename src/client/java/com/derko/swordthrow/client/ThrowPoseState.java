@@ -2,7 +2,6 @@ package com.derko.swordthrow.client;
 
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Arm;
 import net.minecraft.util.math.MathHelper;
@@ -106,12 +105,12 @@ public final class ThrowPoseState {
         matrices.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(pose.offHandSide() * (-14.0F * hidden - 14.0F * extend + 2.5F * pose.offSwayRoll())));
     }
 
-    public static void applyThirdPersonOffHandPose(PlayerEntityRenderState renderState, Arm offArmSide, ModelPart offArm) {
+    public static void applyThirdPersonOffHandPose(float age, Arm offArmSide, ModelPart offArm) {
         if (offArmSide == null) {
             return;
         }
 
-        PoseSample pose = sample(renderState.age, offArmSide.getOpposite(), renderState.age - MathHelper.floor(renderState.age));
+        PoseSample pose = sample(age, offArmSide.getOpposite(), age - MathHelper.floor(age));
         float support = Math.max(pose.offHandPresence(), pose.offHandExtend());
         if (support <= 0.001F && pose.offHandRecoil() <= 0.001F) {
             return;
@@ -128,12 +127,12 @@ public final class ThrowPoseState {
         offArm.roll += armRoll;
     }
 
-    public static void applyThirdPersonMainHandPose(PlayerEntityRenderState renderState, Arm mainArmSide, ModelPart mainArm) {
+    public static void applyThirdPersonMainHandPose(float age, Arm mainArmSide, ModelPart mainArm) {
         if (mainArmSide == null) {
             return;
         }
 
-        PoseSample pose = sample(renderState.age, mainArmSide, renderState.age - MathHelper.floor(renderState.age));
+        PoseSample pose = sample(age, mainArmSide, age - MathHelper.floor(age));
         if (pose.windUp() <= 0.001F && pose.release() <= 0.001F) {
             return;
         }

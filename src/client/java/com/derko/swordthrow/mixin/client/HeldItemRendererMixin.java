@@ -2,7 +2,7 @@ package com.derko.swordthrow.mixin.client;
 
 import com.derko.swordthrow.client.ThrowPoseState;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
-import net.minecraft.client.render.command.OrderedRenderCommandQueue;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.item.HeldItemRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
@@ -18,13 +18,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class HeldItemRendererMixin {
 
     @Invoker("renderArmHoldingItem")
-    protected abstract void swordthrow$invokeRenderArmHoldingItem(MatrixStack matrices, OrderedRenderCommandQueue queue, int light, float equipProgress, float swingProgress, Arm arm);
+    protected abstract void swordthrow$invokeRenderArmHoldingItem(MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, float equipProgress, float swingProgress, Arm arm);
 
     @Inject(
         method = "renderFirstPersonItem",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/client/util/math/MatrixStack;push()V", shift = At.Shift.AFTER)
     )
-    private void swordthrow$applyThrowPoseInScope(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item, float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
+    private void swordthrow$applyThrowPoseInScope(AbstractClientPlayerEntity player, float tickDelta, float pitch, Hand hand, float swingProgress, ItemStack item, float equipProgress, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light, CallbackInfo ci) {
         if (player.isInvisible()) return;
 
         if (hand == Hand.MAIN_HAND && !item.isEmpty()) {
@@ -35,7 +35,7 @@ public abstract class HeldItemRendererMixin {
         if (hand == Hand.OFF_HAND && item.isEmpty() && ThrowPoseState.isOffHandVisible()) {
             Arm aimArm = player.getMainArm().getOpposite();
             ThrowPoseState.applyOffHandAimContext(player, matrices, aimArm, tickDelta);
-            this.swordthrow$invokeRenderArmHoldingItem(matrices, queue, light, 0.0F, swingProgress, aimArm);
+            this.swordthrow$invokeRenderArmHoldingItem(matrices, vertexConsumers, light, 0.0F, swingProgress, aimArm);
         }
     }
 }
